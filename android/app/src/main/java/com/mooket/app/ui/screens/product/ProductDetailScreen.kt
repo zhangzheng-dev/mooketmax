@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,7 +50,7 @@ import java.util.Locale
  * 产品详情页（搜索结果/产品聚合页）
  * 设计来源：Figma - node-id: 158-172
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProductDetailScreen(
     productId: Int,
@@ -128,127 +129,139 @@ fun ProductDetailScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .padding(paddingValues)
+                .padding(paddingValues),
+            state = listState
         ) {
             if (uiState.isLoading) {
-                // 加载中
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Primary)
+                    }
                 }
             } else if (uiState.product != null) {
                 val product = uiState.product!!
 
-                // 数据看板
-                DataDashboard(
-                    product = product,
-                    isInquiryTab = uiState.selectedTab == 1
-                )
+                // 数据看板 - 非吸顶，随内容滚动
+                item {
+                    DataDashboard(
+                        product = product,
+                        isInquiryTab = uiState.selectedTab == 1
+                    )
+                }
 
-                // Tab选择区域
-                TabSection(
-                    selectedTab = uiState.selectedTab,
-                    selectedSort = uiState.selectedSort,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    onSortSelected = { viewModel.selectSort(it) }
-                )
+                // 浅绿间隔 - 不吸顶，随内容滚动
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(Color(0xFFF4FBF8))
+                    )
+                }
+
+                // Tab选择区域 - 吸顶
+                stickyHeader(key = "product_tab") {
+                    TabSection(
+                        selectedTab = uiState.selectedTab,
+                        selectedSort = uiState.selectedSort,
+                        onTabSelected = { viewModel.selectTab(it) },
+                        onSortSelected = { viewModel.selectSort(it) }
+                    )
+                }
 
                 // 列表内容
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
-                    // 列表刷新时显示加载指示器
-                    if (uiState.isListRefreshing) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isListRefreshing) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                itemsIndexed(uiState.currentSummaries) { index, summary ->
+                    LaunchedEffect(index) {
+                        if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
+                            viewModel.loadMore()
                         }
                     }
 
-                    itemsIndexed(uiState.currentSummaries) { index, summary ->
-                        // 检测是否接近底部，需要加载更多
-                        LaunchedEffect(index) {
-                            if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
-                                viewModel.loadMore()
-                            }
-                        }
-
-                        ProductSummaryItem(
-                            summary = summary,
-                            isLast = index == uiState.currentSummaries.size - 1 && !uiState.hasMorePages,
-                            isInquiryTab = uiState.selectedTab == 1,
-                            onClick = {
-                                val c = summary.country ?: return@ProductSummaryItem
-                                val fn = summary.factoryNo ?: return@ProductSummaryItem
+                    ProductSummaryItem(
+                        summary = summary,
+                        isLast = index == uiState.currentSummaries.size - 1 && !uiState.hasMorePages,
+                        isInquiryTab = uiState.selectedTab == 1,
+                        onClick = {
+                            val c = summary.country
+                            val fn = summary.factoryNo
+                            if (c != null && fn != null) {
                                 onCountryFactoryProductClick(c, fn, productName, category)
                             }
-                        )
-                    }
+                        }
+                    )
+                }
 
-                    // 底部加载中指示器
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
+                }
 
-                    // 底部没有更多了
-                    if (!uiState.hasMorePages && !uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "没有更多了～",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF9DA4A3)
-                                )
-                            }
+                if (!uiState.hasMorePages && !uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "没有更多了～",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9DA4A3)
+                            )
                         }
                     }
                 }
             } else if (uiState.error != null) {
-                // 错误状态
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.error ?: "加载失败",
-                        fontSize = 14.sp,
-                        color = TextHint
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.error ?: "加载失败",
+                            fontSize = 14.sp,
+                            color = TextHint
+                        )
+                    }
                 }
             }
         }
@@ -505,15 +518,7 @@ private fun TabSection(
     onTabSelected: (Int) -> Unit,
     onSortSelected: (String) -> Unit
 ) {
-    Column {
-        // 背景条
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Color(0xFFF4FBF8))
-        )
-
+    Column(modifier = Modifier.background(Color.White)) {
         // Tab内容
         Row(
             modifier = Modifier

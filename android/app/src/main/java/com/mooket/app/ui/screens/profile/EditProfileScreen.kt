@@ -39,7 +39,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.yalantis.ucrop.UCrop
 import com.mooket.app.ui.theme.*
+import java.io.File
 
 /**
  * 编辑资料页面
@@ -78,12 +80,50 @@ fun EditProfileScreen(
         if (tempNickname.isEmpty() && uiState.nickname.isNotEmpty()) {
             tempNickname = uiState.nickname
         }
-        if (tempAvatarUrl == null && uiState.avatarUrl != null) {
-            tempAvatarUrl = uiState.avatarUrl
-        }
         if (tempIdentityTags.isEmpty() && uiState.identityTags.isNotEmpty()) {
             tempIdentityTags = uiState.identityTags
         }
+    }
+
+    // 头像URL变化时同步到临时状态（用于拍照/上传后刷新预览）
+    LaunchedEffect(uiState.avatarUrl, uiState.pendingAvatarUrl) {
+        // 优先显示本地预览（pendingAvatarUrl），否则显示已保存的 avatarUrl
+        val previewUrl = uiState.pendingAvatarUrl ?: uiState.avatarUrl
+        if (!previewUrl.isNullOrEmpty()) {
+            tempAvatarUrl = previewUrl
+        }
+    }
+
+    // UCrop 裁剪结果
+    val cropLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            result.data?.let { data ->
+                val resultUri = UCrop.getOutput(data)
+                if (resultUri != null) {
+                    viewModel.setCroppedFileUri(resultUri)
+                    viewModel.uploadCroppedAvatar(resultUri)
+                }
+            }
+        }
+    }
+
+    // 裁剪启动函数
+    fun startCrop(sourceUri: Uri) {
+        val destinationUri = Uri.fromFile(
+            File(context.cacheDir, "cropped_${System.currentTimeMillis()}.jpg")
+        )
+        val options = UCrop.Options().apply {
+            setCircleDimmedLayer(true)
+            setShowCropFrame(false)
+            setCompressionQuality(90)
+        }
+        val intent = UCrop.of(sourceUri, destinationUri)
+            .withAspectRatio(1f, 1f)
+            .withOptions(options)
+            .getIntent(context)
+        cropLauncher.launch(intent)
     }
 
     // 拍照选择器
@@ -91,8 +131,11 @@ fun EditProfileScreen(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            // 拍照成功，上传临时文件
-            viewModel.uploadAvatar(context)
+            // 拍照成功，先裁剪再上传
+            val uri = viewModel.getTempImageFileUri(context)
+            if (uri != null) {
+                startCrop(uri)
+            }
         }
     }
 
@@ -100,10 +143,7 @@ fun EditProfileScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            viewModel.setSelectedImageUri(it)
-            viewModel.uploadAvatar(context)
-        }
+        uri?.let { startCrop(it) }
     }
 
     // 权限请求
@@ -112,7 +152,6 @@ fun EditProfileScreen(
     ) { isGranted ->
         if (isGranted && pendingCameraLaunch) {
             pendingCameraLaunch = false
-            viewModel.clearSelectedImage()
             val tempFile = viewModel.getTempImageFile(context)
             val uri = androidx.core.content.FileProvider.getUriForFile(
                 context,
@@ -149,7 +188,7 @@ fun EditProfileScreen(
         EditProfileHeader(
             onBackClick = onBackClick,
             onSaveClick = {
-                viewModel.saveProfile(tempNickname, tempIdentityTags)
+                viewModel.saveProfile(context, tempNickname, tempIdentityTags)
             }
         )
 

@@ -415,4 +415,62 @@ data class CountryFactoryProductUiState(
     val selectedMerchants: Set<Long> = emptySet(),
     // 地区筛选
     val regions: Set<String> = emptySet()
-)
+) {
+    /**
+     * 过滤后的商家报盘列表（由 detail.merchantOffers + 筛选条件派生）
+     */
+    val filteredMerchantOffers: List<MerchantOfferGroup>
+        get() {
+            val offers = detail?.merchantOffers ?: return emptyList()
+            val minPrice = priceMin?.toDoubleOrNull()
+            val maxPrice = priceMax?.toDoubleOrNull()
+
+            return offers.mapNotNull { group ->
+                val filteredEmployees = group.employeeOffers.filter { offer ->
+                    // 价格区间筛选
+                    if (minPrice != null || maxPrice != null) {
+                        val price = offer.price.replace(Regex("[^\\d.]"), "").toDoubleOrNull()
+                        if (price != null) {
+                            if (minPrice != null && price < minPrice) false
+                            else if (maxPrice != null && price > maxPrice) false
+                            else true
+                        } else false
+                    } else true
+
+                    // 货物类型筛选
+                    if (goodsTypes.isNotEmpty()) {
+                        val goodsType = offer.goodsType ?: return@filter false
+                        if (goodsType !in goodsTypes) false else true
+                    } else true
+
+                    // 标签筛选
+                    if (tags.isNotEmpty()) {
+                        val offerTags = offer.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+                        if (tags.none { it in offerTags }) false else true
+                    } else true
+
+                    // 知名商家筛选（使用 group.isFamousMerchant，不是 offer.isFamousMerchant）
+                    if (isFamousMerchant) {
+                        if (!group.isFamousMerchant) false else true
+                    } else true
+
+                    // 商家筛选
+                    if (selectedMerchants.isNotEmpty()) {
+                        if (group.merchantId !in selectedMerchants) false else true
+                    } else true
+
+                    // 地区筛选
+                    if (regions.isNotEmpty()) {
+                        val region = offer.goodsLocation ?: return@filter false
+                        if (region !in regions) false else true
+                    } else true
+                }
+
+                if (filteredEmployees.isNotEmpty()) {
+                    group.copy(employeeOffers = filteredEmployees)
+                } else {
+                    null
+                }
+            }
+        }
+}

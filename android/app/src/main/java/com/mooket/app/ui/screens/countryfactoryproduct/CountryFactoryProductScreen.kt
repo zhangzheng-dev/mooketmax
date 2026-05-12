@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -74,7 +75,7 @@ import java.util.*
 /**
  * 国家+厂号+产品详情页
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun CountryFactoryProductScreen(
     country: String,
@@ -245,213 +246,153 @@ fun CountryFactoryProductScreen(
             }
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .padding(paddingValues)
+                .padding(paddingValues),
+            state = listState
         ) {
             if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Primary)
+                    }
                 }
             } else if (uiState.error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = uiState.error ?: "加载失败", color = TextHint)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = uiState.error ?: "加载失败", color = TextHint)
+                    }
                 }
             } else {
                 uiState.detail?.let { detail ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                    ) {
-                        // 固定的头部区域（不随列表滚动）
+                    // 价格看板 - 非吸顶，随内容滚动
+                    item {
                         PriceInfoCard(
                             detail = detail,
                             offerType = uiState.offerType,
                             isTrendExpanded = uiState.isTrendExpanded,
                             onToggleTrend = { viewModel.toggleTrend() }
                         )
+                    }
 
-                        SortBar(
-                            currentSort = uiState.sortBy,
-                            currentType = uiState.offerType,
-                            onSortChange = { viewModel.switchSortBy(it) },
-                            onTypeChange = { viewModel.switchOfferType(it) }
+                    // 浅绿间隔 - 不吸顶，随内容滚动
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(12.dp)
+                                .background(Background)
                         )
+                    }
 
-                        // 计算商家选项（从当前数据中提取）
-                        val merchantOptions = remember(detail.merchantOffers) {
-                            detail.merchantOffers.mapNotNull { group ->
-                                group.merchantId?.let { id -> MerchantOption(id, group.merchantName ?: "未知商家") }
-                            }.distinctBy { it.id }
+                    // 排序栏 + 筛选栏 — 合并为同一个吸顶容器
+                    val merchantOptions = derivedMerchantOptions(detail.merchantOffers)
+                    val regionOptions = derivedRegionOptions(detail.merchantOffers)
+
+                    stickyHeader(key = "cfp_sticky") {
+                        Column(modifier = Modifier.background(Color.White)) {
+                            SortBar(
+                                currentSort = uiState.sortBy,
+                                currentType = uiState.offerType,
+                                onSortChange = { viewModel.switchSortBy(it) },
+                                onTypeChange = { viewModel.switchOfferType(it) }
+                            )
+                            FilterBar(
+                                activeFilters = uiState.activeFilters,
+                                priceMin = uiState.priceMin,
+                                priceMax = uiState.priceMax,
+                                goodsTypes = uiState.goodsTypes,
+                                feedingTypes = uiState.feedingTypes,
+                                tags = uiState.tags,
+                                offerType = uiState.offerType,
+                                isFamousMerchant = uiState.isFamousMerchant,
+                                selectedMerchants = uiState.selectedMerchants,
+                                regions = uiState.regions,
+                                merchantOptions = merchantOptions,
+                                regionOptions = regionOptions,
+                                onFilterClick = { viewModel.toggleFilter(it) },
+                                onPriceRangeChange = { min, max -> viewModel.setPriceRange(min, max) },
+                                onGoodsTypeToggle = { viewModel.toggleGoodsType(it) },
+                                onFeedingTypeToggle = { viewModel.toggleFeedingType(it) },
+                                onTagToggle = { viewModel.toggleTag(it) },
+                                onFamousMerchantToggle = { viewModel.toggleFamousMerchant() },
+                                onMerchantToggle = { viewModel.toggleMerchant(it) },
+                                onRegionToggle = { viewModel.toggleRegion(it) },
+                                onClearFilters = { viewModel.clearFilters() }
+                            )
                         }
+                    }
 
-                        // 计算地区选项（从当前数据中提取）
-                        val regionOptions = remember(detail.merchantOffers) {
-                            detail.merchantOffers.mapNotNull { group ->
-                                group.employeeOffers.mapNotNull { it.goodsLocation }
-                            }.flatten().distinct()
+                    // 报盘列表（按商家分组）
+                    itemsIndexed(
+                        items = uiState.filteredMerchantOffers,
+                        key = { _, merchantGroup -> merchantGroup.merchantId ?: merchantGroup.hashCode() }
+                    ) { index, merchantGroup ->
+                        Column {
+                            MerchantOfferItem(
+                                merchantGroup = merchantGroup,
+                                offerType = uiState.offerType,
+                                onClick = { },
+                                onCopyPhone = onCopyPhone,
+                                onCallClick = onCallClick,
+                                onViewOriginalText = { text ->
+                                    originalText = text
+                                    showBottomSheet = true
+                                }
+                            )
                         }
-
-                        FilterBar(
-                            activeFilters = uiState.activeFilters,
-                            priceMin = uiState.priceMin,
-                            priceMax = uiState.priceMax,
-                            goodsTypes = uiState.goodsTypes,
-                            feedingTypes = uiState.feedingTypes,
-                            tags = uiState.tags,
-                            offerType = uiState.offerType,
-                            isFamousMerchant = uiState.isFamousMerchant,
-                            selectedMerchants = uiState.selectedMerchants,
-                            regions = uiState.regions,
-                            merchantOptions = merchantOptions,
-                            regionOptions = regionOptions,
-                            onFilterClick = { viewModel.toggleFilter(it) },
-                            onPriceRangeChange = { min, max -> viewModel.setPriceRange(min, max) },
-                            onGoodsTypeToggle = { viewModel.toggleGoodsType(it) },
-                            onFeedingTypeToggle = { viewModel.toggleFeedingType(it) },
-                            onTagToggle = { viewModel.toggleTag(it) },
-                            onFamousMerchantToggle = { viewModel.toggleFamousMerchant() },
-                            onMerchantToggle = { viewModel.toggleMerchant(it) },
-                            onRegionToggle = { viewModel.toggleRegion(it) },
-                            onClearFilters = { viewModel.clearFilters() }
-                        )
-
-                        // 应用筛选逻辑
-                        val filteredMerchantOffers = remember(detail.merchantOffers, uiState.priceMin, uiState.priceMax, uiState.goodsTypes, uiState.feedingTypes, uiState.tags, uiState.isFamousMerchant, uiState.selectedMerchants, uiState.regions) {
-                            detail.merchantOffers.mapNotNull { group ->
-                                // 知名商家过滤
-                                if (uiState.isFamousMerchant && !group.isFamousMerchant) {
-                                    return@mapNotNull null
-                                }
-                                // 商家筛选过滤
-                                if (uiState.selectedMerchants.isNotEmpty()) {
-                                    if (group.merchantId == null || !uiState.selectedMerchants.contains(group.merchantId)) {
-                                        return@mapNotNull null
-                                    }
-                                }
-                                // 地区过滤
-                                if (uiState.regions.isNotEmpty()) {
-                                    val hasRegion = group.employeeOffers.any { offer ->
-                                        offer.goodsLocation != null && uiState.regions.any { region -> offer.goodsLocation!!.contains(region) }
-                                    }
-                                    if (!hasRegion) return@mapNotNull null
-                                }
-                                // 过滤员工报价
-                                val filteredOffers = group.employeeOffers.filter { offer ->
-                                    var passes = true
-                                    // 价格区间过滤
-                                    if (uiState.priceMin != null || uiState.priceMax != null) {
-                                        val price = offer.price?.replace(Regex("[^\\d.]"), "")?.toDoubleOrNull()
-                                        if (price != null) {
-                                            if (uiState.priceMin != null && price < uiState.priceMin!!.toDouble()) passes = false
-                                            if (uiState.priceMax != null && price > uiState.priceMax!!.toDouble()) passes = false
-                                        } else {
-                                            passes = false // 没有价格且有价格筛选条件时不通过
-                                        }
-                                    }
-                                    // 货物类型过滤
-                                    if (uiState.goodsTypes.isNotEmpty()) {
-                                        if (offer.goodsType == null || !uiState.goodsTypes.contains(offer.goodsType)) {
-                                            passes = false
-                                        }
-                                    }
-                                    // 饲养方式过滤（从 tags 中提取）
-                                    if (uiState.feedingTypes.isNotEmpty()) {
-                                        val hasFeedingType = uiState.feedingTypes.any { ft ->
-                                            offer.tags?.contains(ft) == true
-                                        }
-                                        if (!hasFeedingType) passes = false
-                                    }
-                                    // 标签过滤
-                                    if (uiState.tags.isNotEmpty()) {
-                                        if (offer.tags == null || !uiState.tags.any { tag -> offer.tags!!.contains(tag) }) {
-                                            passes = false
-                                        }
-                                    }
-                                    passes
-                                }
-                                // 如果过滤后还有报价，返回新的分组
-                                if (filteredOffers.isNotEmpty()) {
-                                    group.copy(employeeOffers = filteredOffers, offerCount = filteredOffers.size)
-                                } else null
-                            }
+                        if (index < uiState.filteredMerchantOffers.lastIndex) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Divider(color = Border, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
+                    }
 
-                        // 可滚动的列表区域
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            state = listState
+                    // 底部加载状态
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // 报盘列表（按商家分组）
-                            itemsIndexed(
-                                items = filteredMerchantOffers,
-                                key = { _, merchantGroup -> merchantGroup.merchantId ?: merchantGroup.hashCode() }
-                            ) { index, merchantGroup ->
-                                Column {
-                                    MerchantOfferItem(
-                                        merchantGroup = merchantGroup,
-                                        offerType = uiState.offerType,
-                                        onClick = { },
-                                        onCopyPhone = onCopyPhone,
-                                        onCallClick = onCallClick,
-                                        onViewOriginalText = { text ->
-                                            originalText = text
-                                            showBottomSheet = true
-                                        }
+                            if (detail.page < detail.totalPages) {
+                                if (uiState.isLoadingMore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Primary,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        text = "加载更多",
+                                        fontSize = 11.sp,
+                                        color = Primary
                                     )
                                 }
-                                if (index < filteredMerchantOffers.lastIndex) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Divider(color = Border, thickness = 0.5.dp)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                }
-                            }
-
-                            // 底部加载状态
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (detail.page < detail.totalPages) {
-                                        if (uiState.isLoadingMore) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                color = Primary,
-                                                strokeWidth = 2.dp
-                                            )
-                                        } else {
-                                            Text(
-                                                text = "加载更多",
-                                                fontSize = 11.sp,
-                                                color = Primary
-                                            )
-                                        }
-                                    } else {
-                                        Text(
-                                            text = "没有更多了～",
-                                            fontSize = 11.sp,
-                                            color = TextHint
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 底部留白，防止最后数据被遮住
-                            item {
-                                Spacer(modifier = Modifier.height(80.dp))
+                            } else {
+                                Text(
+                                    text = "没有更多了～",
+                                    fontSize = 11.sp,
+                                    color = TextHint
+                                )
                             }
                         }
+                    }
+
+                    // 底部留白，防止最后数据被遮住
+                    item {
+                        Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
             }
@@ -491,6 +432,24 @@ fun CountryFactoryProductScreen(
             }
         }
     }
+}
+
+/**
+ * 计算商家选项（非 @Composable）
+ */
+private fun derivedMerchantOptions(merchantOffers: List<MerchantOfferGroup>): List<MerchantOption> {
+    return merchantOffers.mapNotNull { group ->
+        group.merchantId?.let { id -> MerchantOption(id, group.merchantName ?: "未知商家") }
+    }.distinctBy { it.id }
+}
+
+/**
+ * 计算地区选项（非 @Composable）
+ */
+private fun derivedRegionOptions(merchantOffers: List<MerchantOfferGroup>): List<String> {
+    return merchantOffers.flatMap { group ->
+        group.employeeOffers.mapNotNull { it.goodsLocation }
+    }.distinct()
 }
 
 /**
@@ -746,9 +705,104 @@ private fun StatItem(label: String, value: String) {
 }
 
 /**
+ * 计算筛选后的数据（在 Composable 上下文中）
+ */
+@Composable
+private fun rememberFilteredData(
+    detail: CountryFactoryProductDetail,
+    isFamousMerchant: Boolean,
+    selectedMerchants: Set<Long>,
+    regions: Set<String>,
+    priceMin: String?,
+    priceMax: String?,
+    goodsTypes: Set<String>,
+    feedingTypes: Set<String>,
+    tags: Set<String>
+): Triple<List<MerchantOfferGroup>, List<MerchantOption>, List<String>> {
+    // 计算商家选项
+    val merchantOptions = remember(detail.merchantOffers) {
+        detail.merchantOffers.mapNotNull { group ->
+            group.merchantId?.let { id -> MerchantOption(id, group.merchantName ?: "未知商家") }
+        }.distinctBy { it.id }
+    }
+
+    // 计算地区选项
+    val regionOptions = remember(detail.merchantOffers) {
+        detail.merchantOffers.mapNotNull { group ->
+            group.employeeOffers.mapNotNull { it.goodsLocation }
+        }.flatten().distinct()
+    }
+
+    // 应用筛选逻辑
+    val filteredMerchantOffers = remember(
+        detail.merchantOffers, priceMin, priceMax, goodsTypes, feedingTypes,
+        tags, isFamousMerchant, selectedMerchants, regions
+    ) {
+        detail.merchantOffers.mapNotNull { group ->
+            // 知名商家过滤
+            if (isFamousMerchant && !group.isFamousMerchant) {
+                return@mapNotNull null
+            }
+            // 商家筛选过滤
+            if (selectedMerchants.isNotEmpty()) {
+                if (group.merchantId == null || !selectedMerchants.contains(group.merchantId)) {
+                    return@mapNotNull null
+                }
+            }
+            // 地区过滤
+            if (regions.isNotEmpty()) {
+                val hasRegion = group.employeeOffers.any { offer ->
+                    offer.goodsLocation != null && regions.any { region -> offer.goodsLocation!!.contains(region) }
+                }
+                if (!hasRegion) return@mapNotNull null
+            }
+            // 过滤员工报价
+            val filteredOffers = group.employeeOffers.filter { offer ->
+                var passes = true
+                // 价格区间过滤
+                if (priceMin != null || priceMax != null) {
+                    val price = offer.price?.replace(Regex("[^\\d.]"), "")?.toDoubleOrNull()
+                    if (price != null) {
+                        if (priceMin != null && price < priceMin.toDouble()) passes = false
+                        if (priceMax != null && price > priceMax.toDouble()) passes = false
+                    } else {
+                        passes = false
+                    }
+                }
+                // 货物类型过滤
+                if (goodsTypes.isNotEmpty()) {
+                    if (offer.goodsType == null || !goodsTypes.contains(offer.goodsType)) {
+                        passes = false
+                    }
+                }
+                // 饲养方式过滤
+                if (feedingTypes.isNotEmpty()) {
+                    val hasFeedingType = feedingTypes.any { ft ->
+                        offer.tags?.contains(ft) == true
+                    }
+                    if (!hasFeedingType) passes = false
+                }
+                // 标签过滤
+                if (tags.isNotEmpty()) {
+                    if (offer.tags == null || !tags.any { tag -> offer.tags!!.contains(tag) }) {
+                        passes = false
+                    }
+                }
+                passes
+            }
+            if (filteredOffers.isNotEmpty()) {
+                group.copy(employeeOffers = filteredOffers, offerCount = filteredOffers.size)
+            } else null
+        }
+    }
+
+    return Triple(filteredMerchantOffers, merchantOptions, regionOptions)
+}
+
+/**
  * 筛选栏
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun FilterBar(
     activeFilters: Set<String>,
@@ -1512,14 +1566,6 @@ private fun SortBar(
             .fillMaxWidth()
             .background(Color.White)
     ) {
-        // 灰色间隔
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Background)
-        )
-
         // 表头
         Row(
             modifier = Modifier
@@ -1549,6 +1595,8 @@ private fun SortBar(
                 )
             }
         }
+
+        Divider(color = Border, thickness = 0.5.dp)
     }
 }
 

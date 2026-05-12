@@ -1,6 +1,7 @@
 package com.mooket.app.ui.screens.country
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +43,7 @@ import java.util.Locale
  * 国家详情页
  * 设计来源：Figma - node-id: 1796-2741
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CountryDetailScreen(
     country: String,
@@ -118,127 +119,142 @@ fun CountryDetailScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .padding(paddingValues)
+                .padding(paddingValues),
+            state = listState
         ) {
             if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Primary)
+                    }
                 }
             } else if (uiState.countryDetail != null) {
                 val detail = uiState.countryDetail!!
 
-                // 数据看板
-                CountryDashboard(
-                    country = detail.country,
-                    category = category,
-                    factoryCount = detail.factoryCount,
-                    merchantCount = detail.merchantCount,
-                    offerCount = detail.offerCount,
-                    selectedTab = uiState.selectedTab,
-                    hotFactories = detail.hotFactories,
-                    hotProducts = detail.hotProducts,
-                    isExpanded = isHotSectionExpanded,
-                    onToggleExpand = { isHotSectionExpanded = !isHotSectionExpanded },
-                    onFactoryClick = onFactoryClick,
-                    onProductClick = onProductClick
-                )
+                // 数据看板 - 非吸顶，随内容滚动
+                item {
+                    CountryDashboard(
+                        country = detail.country,
+                        category = category,
+                        factoryCount = detail.factoryCount,
+                        merchantCount = detail.merchantCount,
+                        offerCount = detail.offerCount,
+                        selectedTab = uiState.selectedTab,
+                        hotFactories = detail.hotFactories,
+                        hotProducts = detail.hotProducts,
+                        isExpanded = isHotSectionExpanded,
+                        onToggleExpand = { isHotSectionExpanded = !isHotSectionExpanded },
+                        onFactoryClick = onFactoryClick,
+                        onProductClick = onProductClick
+                    )
+                }
 
-                // Tab选择区域
-                CountryTabSection(
-                    selectedTab = uiState.selectedTab,
-                    selectedSort = uiState.selectedSort,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    onSortSelected = { viewModel.selectSort(it) }
-                )
+                // 浅绿间隔 - 不吸顶，随内容滚动
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(Color(0xFFF4FBF8))
+                    )
+                }
+
+                // Tab选择区域 - 吸顶
+                stickyHeader(key = "country_tab") {
+                    CountryTabSection(
+                        selectedTab = uiState.selectedTab,
+                        selectedSort = uiState.selectedSort,
+                        onTabSelected = { viewModel.selectTab(it) },
+                        onSortSelected = { viewModel.selectSort(it) }
+                    )
+                }
 
                 // 列表内容
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
-                    // 列表刷新时显示加载指示器
-                    if (uiState.isListRefreshing) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isListRefreshing) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                itemsIndexed(uiState.currentSummaries) { index, summary ->
+                    LaunchedEffect(index) {
+                        if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
+                            viewModel.loadMore()
                         }
                     }
 
-                    itemsIndexed(uiState.currentSummaries) { index, summary ->
-                        LaunchedEffect(index) {
-                            if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
-                                viewModel.loadMore()
-                            }
-                        }
+                    CountryProductItem(
+                        summary = summary,
+                        isInquiryTab = uiState.selectedTab == 1,
+                        onClick = { onProductClick(country, summary.productName ?: "", category) }
+                    )
+                }
 
-                        CountryProductItem(
-                            summary = summary,
-                            isInquiryTab = uiState.selectedTab == 1,
-                            onClick = { onProductClick(country, summary.productName ?: "", category) }
-                        )
-                    }
-
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
+                }
 
-                    if (!uiState.hasMorePages && !uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "没有更多了～",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF9DA4A3)
-                                )
-                            }
+                if (!uiState.hasMorePages && !uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "没有更多了～",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9DA4A3)
+                            )
                         }
                     }
                 }
             } else if (uiState.error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.error ?: "加载失败",
-                        fontSize = 14.sp,
-                        color = TextHint
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.error ?: "加载失败",
+                            fontSize = 14.sp,
+                            color = TextHint
+                        )
+                    }
                 }
             }
         }
@@ -612,14 +628,7 @@ private fun CountryTabSection(
     onTabSelected: (Int) -> Unit,
     onSortSelected: (String) -> Unit
 ) {
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Color(0xFFF4FBF8))
-        )
-
+    Column(modifier = Modifier.background(Color.White)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

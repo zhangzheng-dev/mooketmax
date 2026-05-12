@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("kotlin-kapt")
 }
 
 android {
@@ -85,6 +86,9 @@ dependencies {
 
     // Coil for images
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // uCrop for image cropping
+    implementation("com.github.yalantis:ucrop:2.2.8")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

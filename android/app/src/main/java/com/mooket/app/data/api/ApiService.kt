@@ -11,6 +11,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Body
 import retrofit2.http.Header
+import okhttp3.RequestBody
 
 /**
  * 牧集 API 服务接口
@@ -432,7 +433,15 @@ interface ApiService {
     @POST("api/v1/user/avatar/upload")
     suspend fun uploadAvatar(
         @Part avatar: MultipartBody.Part
-    ): ApiResponse<String>
+    ): ApiResponse<AvatarUploadResponse>
+
+    /**
+     * 上传头像（通过 URI 直接流式上传，解决相册权限问题）
+     */
+    @POST("api/v1/user/avatar/upload")
+    suspend fun uploadAvatarUri(
+        @Body avatar: RequestBody
+    ): ApiResponse<AvatarUploadResponse>
 
     /**
      * 登出

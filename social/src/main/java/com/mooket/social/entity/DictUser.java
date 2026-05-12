@@ -35,7 +35,9 @@ public class DictUser {
 
     private String cancellationStatus; // 注销状态：active/cancelled
 
-    private String mooketId;            // Mooket ID
+    private String mooketId;            // Mooket ID（来自UAC）
+
+    private String mooketNo;            // Mooket No（来自UAC user_muji_no）
 
     private LocalDateTime createTime;
 

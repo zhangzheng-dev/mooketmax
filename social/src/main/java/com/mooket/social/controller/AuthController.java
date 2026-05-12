@@ -4,6 +4,8 @@ import com.mooket.social.common.ApiResponse;
 import com.mooket.social.common.JwtUtil;
 import com.mooket.social.entity.DictUser;
 import com.mooket.social.mapper.DictUserMapper;
+import com.mooket.social.entity.uac.UacUser;
+import com.mooket.social.uac.mapper.UacUserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +25,9 @@ public class AuthController {
 
     @Autowired
     private DictUserMapper dictUserMapper;
+
+    @Autowired
+    private UacUserMapper uacUserMapper;
 
     // 内存存储：手机号 → 验证码
     private final Map<String, String> smsCodeStore = new ConcurrentHashMap<>();
@@ -106,6 +111,14 @@ public class AuthController {
             user.setPhone(phone);
             user.setCreateTime(java.time.LocalDateTime.now());
             user.setUpdateTime(java.time.LocalDateTime.now());
+
+            // 从UAC查询mooket_no和mooket_id
+            UacUser uacUser = uacUserMapper.selectByPhone(phone);
+            if (uacUser != null) {
+                user.setMooketNo(uacUser.getUserMujiNo());
+                user.setMooketId(String.valueOf(uacUser.getId()));
+            }
+
             dictUserMapper.insert(user);
         }
 

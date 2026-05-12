@@ -29,6 +29,9 @@ public interface StatProductMapper extends BaseMapper<StatProduct> {
     @Delete({"DELETE FROM stat_product WHERE stat_date = #{statDate}"})
     void deleteByDate(@Param("statDate") LocalDate statDate);
 
+    @Delete({"DELETE FROM stat_product WHERE stat_date < CURRENT_DATE - INTERVAL '30 day'"})
+    int deleteOldRecords();
+
     @Select({"SELECT product_id, product_name, today_offer_count FROM stat_product WHERE stat_date = #{statDate} AND category = #{category} AND today_offer_count >= 10 ORDER BY today_offer_count DESC LIMIT #{limit}"})
     @Results({@Result(property = "productId", column = "product_id"), @Result(property = "productName", column = "product_name"), @Result(property = "todayOfferCount", column = "today_offer_count")})
     List<HotProduct> findHotProducts(@Param("statDate") LocalDate statDate, @Param("category") String category, @Param("limit") int limit);

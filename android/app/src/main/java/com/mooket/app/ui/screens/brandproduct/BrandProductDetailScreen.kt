@@ -1,5 +1,6 @@
 package com.mooket.app.ui.screens.brandproduct
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,7 +42,7 @@ import java.util.Locale
  * 品牌+产品详情页（搜索结果页）
  * 样式与 ProductDetailScreen 完全一致
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrandProductDetailScreen(
     brandName: String,
@@ -149,130 +150,148 @@ fun BrandProductDetailScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .padding(paddingValues)
+                .padding(paddingValues),
+            state = listState
         ) {
             if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Primary)
+                    }
                 }
             } else if (uiState.brandDetail != null) {
                 val detail = uiState.brandDetail!!
 
-                // 数据看板 - 与 ProductDetailScreen 一致
-                BrandProductDashboard(
-                    brandName = brandName,
-                    productName = productName,
-                    offerCount = if (uiState.selectedTab == 1) detail.todayInquiryCount + detail.yesterdayInquiryCount else detail.todayOfferCount + detail.yesterdayOfferCount,
-                    priceMin = detail.priceMin,
-                    priceMax = detail.priceMax,
-                    merchantCount = detail.merchantCount ?: 0,
-                    factoryCount = detail.factoryCount,
-                    isInquiryTab = uiState.selectedTab == 1
-                )
+                // 数据看板 - 非吸顶，随内容滚动
+                item {
+                    BrandProductDashboard(
+                        brandName = brandName,
+                        productName = productName,
+                        offerCount = if (uiState.selectedTab == 1) detail.todayInquiryCount + detail.yesterdayInquiryCount else detail.todayOfferCount + detail.yesterdayOfferCount,
+                        priceMin = detail.priceMin,
+                        priceMax = detail.priceMax,
+                        merchantCount = detail.merchantCount ?: 0,
+                        factoryCount = detail.factoryCount,
+                        isInquiryTab = uiState.selectedTab == 1
+                    )
+                }
 
-                // Tab选择区域
-                BrandProductTabSection(
-                    selectedTab = uiState.selectedTab,
-                    selectedSort = uiState.selectedSort,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    onSortSelected = { viewModel.selectSort(it) }
-                )
+                // 浅绿间隔 - 不吸顶，随内容滚动
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(Color(0xFFF4FBF8))
+                    )
+                }
+
+                // Tab选择区域 - 吸顶
+                stickyHeader(key = "brand_product_tab") {
+                    BrandProductTabSection(
+                        selectedTab = uiState.selectedTab,
+                        selectedSort = uiState.selectedSort,
+                        onTabSelected = { viewModel.selectTab(it) },
+                        onSortSelected = { viewModel.selectSort(it) }
+                    )
+                }
 
                 // 列表内容
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
-                    if (uiState.isListRefreshing) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isListRefreshing) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                itemsIndexed(
+                    items = uiState.currentSummaries,
+                    key = { index, summary -> summary.productId * 10000 + (uiState.currentPage - 1) * 10 + index }
+                ) { index, summary ->
+                    LaunchedEffect(index) {
+                        if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
+                            viewModel.loadMore()
                         }
                     }
 
-                    itemsIndexed(
-                        items = uiState.currentSummaries,
-                        key = { index, summary -> summary.productId * 10000 + (uiState.currentPage - 1) * 10 + index }
-                    ) { index, summary ->
-                        LaunchedEffect(index) {
-                            if (index >= uiState.currentSummaries.size - 3 && uiState.hasMorePages && !uiState.isLoadingMore) {
-                                viewModel.loadMore()
-                            }
-                        }
-
-                        BrandProductSummaryItem(
-                            summary = summary,
-                            isLast = index == uiState.currentSummaries.size - 1 && !uiState.hasMorePages,
-                            isInquiryTab = uiState.selectedTab == 1,
-                            onClick = {
-                                val c = summary.country ?: return@BrandProductSummaryItem
-                                val fn = summary.factoryNo ?: return@BrandProductSummaryItem
+                    BrandProductSummaryItem(
+                        summary = summary,
+                        isLast = index == uiState.currentSummaries.size - 1 && !uiState.hasMorePages,
+                        isInquiryTab = uiState.selectedTab == 1,
+                        onClick = {
+                            val c = summary.country
+                            val fn = summary.factoryNo
+                            if (c != null && fn != null) {
                                 onCountryFactoryProductClick(c, fn, productName, category)
                             }
-                        )
-                    }
+                        }
+                    )
+                }
 
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
+                }
 
-                    if (!uiState.hasMorePages && !uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "没有更多了～",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF9DA4A3)
-                                )
-                            }
+                if (!uiState.hasMorePages && !uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "没有更多了～",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9DA4A3)
+                            )
                         }
                     }
                 }
             } else if (uiState.error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.error ?: "加载失败",
-                        fontSize = 14.sp,
-                        color = TextHint
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.error ?: "加载失败",
+                            fontSize = 14.sp,
+                            color = TextHint
+                        )
+                    }
                 }
             }
         }
@@ -431,14 +450,7 @@ private fun BrandProductTabSection(
     onTabSelected: (Int) -> Unit,
     onSortSelected: (String) -> Unit
 ) {
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Color(0xFFF4FBF8))
-        )
-
+    Column(modifier = Modifier.background(Color.White)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

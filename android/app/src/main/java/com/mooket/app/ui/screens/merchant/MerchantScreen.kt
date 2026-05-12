@@ -3,6 +3,7 @@ package com.mooket.app.ui.screens.merchant
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -444,6 +445,7 @@ fun MerchantScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun MerchantContent(
     merchant: MerchantDetail,
@@ -497,255 +499,221 @@ private fun MerchantContent(
     onSortByRecommendToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Background)
-    ) {
-        // ========== 数据看板 ==========
-        DataDashboard(merchant = merchant)
+    val listState = rememberLazyListState()
+    val sheetState = rememberModalBottomSheetState()
+    var currentFilterType by remember { mutableStateOf("") }
 
-        // ========== Tab 选择 ==========
-        TabSection(
-            selectedTab = selectedTab,
-            onTabSelected = onTabSelected,
-            priceSortOrder = priceSortOrder,
-            onPriceSortToggle = onPriceSortToggle,
-            sortByRecommend = sortByRecommend,
-            onSortByRecommendToggle = onSortByRecommendToggle
-        )
-
-        // ========== 筛选条件和列表区域 ==========
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            // FilterSection - 在顶部
-            FilterSection(
-                onCountryFactoryClick = onCountryFactoryClick,
-                hasCountrySelection = hasCountrySelection,
-                onRegionClick = onRegionClick,
-                hasRegionSelection = selectedRegions.isNotEmpty(),
-                onProductClick = onProductClick,
-                hasProductSelection = selectedProducts.isNotEmpty(),
-                onGoodsTypeClick = onGoodsTypeClick,
-                hasGoodsTypeSelection = selectedGoodsTypes.isNotEmpty(),
-                onFeedingMethodClick = onFeedingMethodClick,
-                hasFeedingMethodSelection = selectedFeedingMethods.isNotEmpty(),
-                activeFilter = when {
-                    showCountryFactoryFilter -> "countryFactory"
-                    showRegionFilter -> "region"
-                    showProductFilter -> "product"
-                    showGoodsTypeFilter -> "goodsType"
-                    showFeedingMethodFilter -> "feedingMethod"
-                    else -> null
+    // filtered list
+    val list by derivedStateOf {
+        var result = currentProducts
+        val hasCountryFilter = selectedCountry != null
+        val hasFactoryFilter = selectedFactories.isNotEmpty()
+        val hasRegionFilter = selectedRegions.isNotEmpty()
+        val hasProductFilter = selectedProducts.isNotEmpty()
+        val hasGoodsTypeFilter = selectedGoodsTypes.isNotEmpty()
+        val hasFeedingFilter = selectedFeedingMethods.isNotEmpty()
+        val hasAnyFilter = hasCountryFilter || hasFactoryFilter || hasRegionFilter || hasProductFilter || hasGoodsTypeFilter || hasFeedingFilter
+        if (hasAnyFilter) {
+            result = result.filter { offer ->
+                if (hasCountryFilter || hasFactoryFilter) {
+                    val offerFactoryKey = "${offer.country}${offer.factoryNo}"
+                    val countryMatch = selectedCountry == null || offer.country == selectedCountry
+                    val factoryMatch = selectedFactories.isEmpty() || selectedFactories.contains(offerFactoryKey)
+                    if (!countryMatch || !factoryMatch) return@filter false
                 }
-            )
-
-            // 列表区域和遮罩层 - Box布局允许筛选面板覆盖在上方
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(Color.White)
-            ) {
-                // 列表区域 - 使用后端分页数据 currentProducts
-                val originalList = remember(selectedTab, currentProducts) {
-                    currentProducts
+                if (hasRegionFilter) {
+                    val regionMatch = offer.employeeOffers?.any { employee ->
+                        val locations = employee.goodsLocation?.split("/")?.map { it.trim() } ?: emptyList()
+                        locations.any { it in selectedRegions }
+                    } ?: false
+                    if (!regionMatch) return@filter false
                 }
-
-                val listState = rememberLazyListState()
-
-                // 使用 derivedStateOf 缓存过滤结果，只在过滤条件真正变化时重新计算
-                val list by derivedStateOf {
-                    var result = currentProducts
-
-                    // 合并所有筛选条件到单次遍历，避免多次 filter 创建中间列表
-                    val hasCountryFilter = selectedCountry != null
-                    val hasFactoryFilter = selectedFactories.isNotEmpty()
-                    val hasRegionFilter = selectedRegions.isNotEmpty()
-                    val hasProductFilter = selectedProducts.isNotEmpty()
-                    val hasGoodsTypeFilter = selectedGoodsTypes.isNotEmpty()
-                    val hasFeedingFilter = selectedFeedingMethods.isNotEmpty()
-                    val hasAnyFilter = hasCountryFilter || hasFactoryFilter || hasRegionFilter || hasProductFilter || hasGoodsTypeFilter || hasFeedingFilter
-
-                    if (hasAnyFilter) {
-                        result = result.filter { offer ->
-                            // 国家+厂号筛选
-                            if (hasCountryFilter || hasFactoryFilter) {
-                                val offerFactoryKey = "${offer.country}${offer.factoryNo}"
-                                val countryMatch = selectedCountry == null || offer.country == selectedCountry
-                                val factoryMatch = selectedFactories.isEmpty() || selectedFactories.contains(offerFactoryKey)
-                                if (!countryMatch || !factoryMatch) return@filter false
-                            }
-
-                            // 地区筛选（员工级别）
-                            if (hasRegionFilter) {
-                                val regionMatch = offer.employeeOffers?.any { employee ->
-                                    val locations = employee.goodsLocation?.split("/")?.map { it.trim() } ?: emptyList()
-                                    locations.any { it in selectedRegions }
-                                } ?: false
-                                if (!regionMatch) return@filter false
-                            }
-
-                            // 产品筛选
-                            if (hasProductFilter && offer.productName !in selectedProducts) {
-                                return@filter false
-                            }
-
-                            // 货物类型筛选（员工级别）
-                            if (hasGoodsTypeFilter) {
-                                val goodsTypeMatch = offer.employeeOffers?.any { it.goodsType in selectedGoodsTypes } ?: false
-                                if (!goodsTypeMatch) return@filter false
-                            }
-
-                            // 饲养方式筛选（员工级别）
-                            if (hasFeedingFilter) {
-                                val feedingMatch = offer.employeeOffers?.any { it.feedingMethod in selectedFeedingMethods } ?: false
-                                if (!feedingMatch) return@filter false
-                            }
-
-                            true
-                        }
-                    }
-
-                    // 排序
-                    if (sortByRecommend) {
-                        result = result.sortedByDescending { it.employeeOffers?.size ?: 0 }
-                    } else {
-                        result = when (priceSortOrder) {
-                            SortOrder.NONE -> result.sortedByDescending { it.publishTime }
-                            SortOrder.ASC -> result.sortedBy { offer ->
-                                offer.employeeOffers?.mapNotNull { it.price }?.minOrNull() ?: offer.price ?: Double.MAX_VALUE
-                            }
-                            SortOrder.DESC -> result.sortedByDescending { offer ->
-                                offer.employeeOffers?.mapNotNull { it.price }?.maxOrNull() ?: offer.price ?: Double.MIN_VALUE
-                            }
-                        }
-                    }
-
-                    result
+                if (hasProductFilter && offer.productName !in selectedProducts) return@filter false
+                if (hasGoodsTypeFilter) {
+                    val goodsTypeMatch = offer.employeeOffers?.any { it.goodsType in selectedGoodsTypes } ?: false
+                    if (!goodsTypeMatch) return@filter false
                 }
-
-                // 监听滚动到底部，自动加载更多（后端分页）
-                LaunchedEffect(listState, list.size, hasMorePages, isLoadingMore) {
-                    snapshotFlow {
-                        val layoutInfo = listState.layoutInfo
-                        val totalItems = layoutInfo.totalItemsCount
-                        val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        // 只有用户真正滚动到底部才加载更多（至少滚动到第10项之后）
-                        lastVisibleItem >= 10 && lastVisibleItem >= totalItems - 3 && hasMorePages && !isLoadingMore
-                    }.collect { shouldLoadMore ->
-                        if (shouldLoadMore && list.isNotEmpty()) {
-                            onLoadMore()
-                        }
-                    }
+                if (hasFeedingFilter) {
+                    val feedingMatch = offer.employeeOffers?.any { it.feedingMethod in selectedFeedingMethods } ?: false
+                    if (!feedingMatch) return@filter false
                 }
-
-                if (list.isEmpty() && !isLoadingMore) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "暂无数据",
-                            color = TextHint
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        itemsIndexed(
-                            items = list,
-                            key = { index, offer -> offer.offerId ?: "${offer.productName}_${offer.country}_${offer.factoryNo}_${offer.publishTime}_$index".hashCode() },
-                            contentType = { _, _ -> "offer_card" }
-                        ) { index, offer ->
-                            Column {
-                                OfferCardNew(
-                                    offer = offer,
-                                    isExpanded = expandedIndices.contains(index),
-                                    onToggleExpand = { onToggleOfferExpand(index) },
-                                    onCopyPhone = { onCopyPhone(merchant.contactPhone) },
-                                    onCallClick = { onCallClick(merchant.contactPhone) },
-                                    onViewOriginalText = onViewOriginalText,
-                                    merchantPhone = merchant.contactPhone
-                                )
-                            }
-                            if (index < list.lastIndex) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Divider(color = Border, thickness = 0.5.dp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                        }
-                        // 底部显示加载状态
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                when {
-                                    isLoadingMore -> {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(24.dp),
-                                                strokeWidth = 3.dp,
-                                                color = Primary
-                                            )
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Text(
-                                                text = "正在加载更多...",
-                                                fontSize = 14.sp,
-                                                color = Primary
-                                            )
-                                        }
-                                    }
-                                    hasMorePages -> {
-                                        Text(
-                                            text = "上滑加载更多",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF9DA4A3)
-                                        )
-                                    }
-                                    else -> {
-                                        Text(
-                                            text = "没有更多了～",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF9DA4A3)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        // 底部留白，防止最后数据被遮住
-                        item {
-                            Spacer(modifier = Modifier.height(80.dp))
-                        }
-                    }
+                true
+            }
+        }
+        if (sortByRecommend) {
+            result = result.sortedByDescending { it.employeeOffers?.size ?: 0 }
+        } else {
+            result = when (priceSortOrder) {
+                SortOrder.NONE -> result.sortedByDescending { it.publishTime }
+                SortOrder.ASC -> result.sortedBy { offer ->
+                    offer.employeeOffers?.mapNotNull { it.price }?.minOrNull() ?: offer.price ?: Double.MAX_VALUE
                 }
+                SortOrder.DESC -> result.sortedByDescending { offer ->
+                    offer.employeeOffers?.mapNotNull { it.price }?.maxOrNull() ?: offer.price ?: Double.MIN_VALUE
+                }
+            }
+        }
+        result
+    }
 
-                // 半透明遮罩层 - 覆盖列表区域（点击关闭筛选面板）
-                if (showCountryFactoryFilter) {
+    // scroll to bottom load more
+    LaunchedEffect(listState, list.size, hasMorePages, isLoadingMore) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleItem >= 10 && lastVisibleItem >= totalItems - 3 && hasMorePages && !isLoadingMore
+        }.collect { shouldLoadMore ->
+            if (shouldLoadMore && list.isNotEmpty()) onLoadMore()
+        }
+    }
+
+    // root Box: LazyColumn for scroll + filter overlays
+    Box(modifier = modifier.fillMaxSize().background(Background)) {
+        LazyColumn(state = listState) {
+            // DataDashboard - item (not sticky)
+            item(key = "merchant_dashboard") {
+                DataDashboard(merchant = merchant)
+            }
+
+            // Light green interval - item (not sticky)
+            item(key = "merchant_interval") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .background(Color(0xFFF4FBF8))
+                )
+            }
+
+            // Combined Tab + Filter stickyHeader
+            stickyHeader(key = "merchant_sticky") {
+                Column {
+                    TabSection(
+                        selectedTab = selectedTab,
+                        onTabSelected = onTabSelected,
+                        priceSortOrder = priceSortOrder,
+                        onPriceSortToggle = onPriceSortToggle,
+                        sortByRecommend = sortByRecommend,
+                        onSortByRecommendToggle = onSortByRecommendToggle
+                    )
+                    FilterSection(
+                        onCountryFactoryClick = onCountryFactoryClick,
+                        hasCountrySelection = hasCountrySelection,
+                        onRegionClick = onRegionClick,
+                        hasRegionSelection = selectedRegions.isNotEmpty(),
+                        onProductClick = onProductClick,
+                        hasProductSelection = selectedProducts.isNotEmpty(),
+                        onGoodsTypeClick = onGoodsTypeClick,
+                        hasGoodsTypeSelection = selectedGoodsTypes.isNotEmpty(),
+                        onFeedingMethodClick = onFeedingMethodClick,
+                        hasFeedingMethodSelection = selectedFeedingMethods.isNotEmpty(),
+                        activeFilter = when {
+                            showCountryFactoryFilter -> "countryFactory"
+                            showRegionFilter -> "region"
+                            showProductFilter -> "product"
+                            showGoodsTypeFilter -> "goodsType"
+                            showFeedingMethodFilter -> "feedingMethod"
+                            else -> null
+                        }
+                    )
+                }
+            }
+
+            // list content
+            if (list.isEmpty() && !isLoadingMore) {
+                item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(1f)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .clickable { onFilterConfirm() }
-                    )
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "no data", color = TextHint)
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = list,
+                    key = { index, offer -> offer.offerId ?: "${offer.productName}_${offer.country}_${offer.factoryNo}_${offer.publishTime}_$index".hashCode() }
+                ) { index, offer ->
+                    Column {
+                        OfferCardNew(
+                            offer = offer,
+                            isExpanded = expandedIndices.contains(index),
+                            onToggleExpand = { onToggleOfferExpand(index) },
+                            onCopyPhone = { onCopyPhone(merchant.contactPhone) },
+                            onCallClick = { onCallClick(merchant.contactPhone) },
+                            onViewOriginalText = onViewOriginalText,
+                            merchantPhone = merchant.contactPhone
+                        )
+                    }
+                    if (index < list.lastIndex) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Divider(color = Border, thickness = 0.5.dp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                 }
 
-                // 筛选面板本体 - 覆盖在遮罩和列表上方
-                if (showCountryFactoryFilter) {
-                    CountryFactoryFilterPanel(
-                        offers = originalList,
+                // bottom loading state
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            isLoadingMore -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Primary, strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(text = "loading...", fontSize = 14.sp, color = Primary)
+                                }
+                            }
+                            hasMorePages -> {
+                                Text(text = "load more", fontSize = 12.sp, color = Color(0xFF9DA4A3))
+                            }
+                            else -> {
+                                Text(text = "no more", fontSize = 12.sp, color = Color(0xFF9DA4A3))
+                            }
+                        }
+                    }
+                }
+
+                // bottom spacer
+                item { Spacer(modifier = Modifier.height(80.dp)) }
+            }
+        }
+
+        // filter overlay panels - ModalBottomSheet from bottom
+        if (showCountryFactoryFilter || showRegionFilter || showProductFilter || showGoodsTypeFilter || showFeedingMethodFilter) {
+            currentFilterType = when {
+                showCountryFactoryFilter -> "countryFactory"
+                showRegionFilter -> "region"
+                showProductFilter -> "product"
+                showGoodsTypeFilter -> "goodsType"
+                showFeedingMethodFilter -> "feedingMethod"
+                else -> ""
+            }
+        }
+        if (showCountryFactoryFilter || showRegionFilter || showProductFilter || showGoodsTypeFilter || showFeedingMethodFilter) {
+            ModalBottomSheet(
+                onDismissRequest = {
+                    if (showCountryFactoryFilter) onFilterConfirm()
+                    else if (showRegionFilter) onRegionConfirm()
+                    else if (showProductFilter) onProductConfirm()
+                    else if (showGoodsTypeFilter) onGoodsTypeConfirm()
+                    else if (showFeedingMethodFilter) onFeedingMethodConfirm()
+                },
+                sheetState = sheetState
+            ) {
+                when (currentFilterType) {
+                    "countryFactory" -> CountryFactoryFilterPanel(
+                        offers = currentProducts,
                         selectedCountry = selectedCountry,
                         selectedFactories = selectedFactories,
                         onCountrySelected = onCountrySelected,
@@ -754,90 +722,30 @@ private fun MerchantContent(
                         onConfirm = onFilterConfirm,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // 地区筛选遮罩层
-                if (showRegionFilter) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(1f)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .clickable { onRegionConfirm() }
-                    )
-                }
-
-                // 地区筛选面板
-                if (showRegionFilter) {
-                    RegionFilterPanel(
-                        offers = originalList,
+                    "region" -> RegionFilterPanel(
+                        offers = currentProducts,
                         selectedRegions = selectedRegions,
                         onRegionToggle = onRegionToggle,
                         onReset = onRegionReset,
                         onConfirm = onRegionConfirm,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // 产品筛选遮罩层
-                if (showProductFilter) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(1f)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .clickable { onProductConfirm() }
-                    )
-                }
-
-                // 产品筛选面板
-                if (showProductFilter) {
-                    ProductFilterPanel(
-                        offers = originalList,
+                    "product" -> ProductFilterPanel(
+                        offers = currentProducts,
                         selectedProducts = selectedProducts,
                         onProductToggle = onProductToggle,
                         onReset = onProductReset,
                         onConfirm = onProductConfirm,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // 货物类型筛选遮罩层
-                if (showGoodsTypeFilter) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(1f)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .clickable { onGoodsTypeConfirm() }
-                    )
-                }
-
-                // 货物类型筛选面板
-                if (showGoodsTypeFilter) {
-                    GoodsTypeFilterPanel(
+                    "goodsType" -> GoodsTypeFilterPanel(
                         selectedGoodsTypes = selectedGoodsTypes,
                         onGoodsTypeToggle = onGoodsTypeToggle,
                         onReset = onGoodsTypeReset,
                         onConfirm = onGoodsTypeConfirm,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // 饲养方式筛选遮罩层
-                if (showFeedingMethodFilter) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(1f)
-                            .background(Color.Black.copy(alpha = 0.60f))
-                            .clickable { onFeedingMethodConfirm() }
-                    )
-                }
-
-                // 饲养方式筛选面板
-                if (showFeedingMethodFilter) {
-                    FeedingMethodFilterPanel(
+                    "feedingMethod" -> FeedingMethodFilterPanel(
                         selectedFeedingMethods = selectedFeedingMethods,
                         onFeedingMethodToggle = onFeedingMethodToggle,
                         onReset = onFeedingMethodReset,
@@ -849,6 +757,7 @@ private fun MerchantContent(
         }
     }
 }
+
 
 /**
  * 商家头部 - Figma node-id: 2:3873
@@ -1007,14 +916,6 @@ private fun TabSection(
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // 分隔背景
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Color(0xFFF4FBF8))
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()

@@ -3,6 +3,7 @@ package com.mooket.app.ui.screens.factory
 import androidx.compose.animation.animateContentSize
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +43,7 @@ import com.mooket.app.ui.util.CountryFlagUtil
  * 厂号详情页
  * 设计来源：Figma - node-id: 158-341 (搜索结果/国家+厂号)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FactoryDetailScreen(
     country: String,
@@ -74,106 +76,123 @@ fun FactoryDetailScreen(
             }
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(Background),
+        state = listState
     ) {
-        // 顶部搜索栏 - 添加 statusBarsPadding() 避免被通知栏遮挡
-        FactoryDetailHeader(
-            country = uiState.factoryDetail?.country ?: country,
-            factoryNo = uiState.factoryDetail?.factoryNo ?: factoryNo,
-            onBackClick = onBackClick,
-            onSearchDelete = onSearchDelete,
-            category = category
-        )
+        // 顶部搜索栏 - 非吸顶，随内容滚动
+        item {
+            FactoryDetailHeader(
+                country = uiState.factoryDetail?.country ?: country,
+                factoryNo = uiState.factoryDetail?.factoryNo ?: factoryNo,
+                onBackClick = onBackClick,
+                onSearchDelete = onSearchDelete,
+                category = category
+            )
+        }
 
         if (uiState.isLoading && uiState.factoryDetail == null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Primary)
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillParentMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Primary)
+                }
             }
         } else if (uiState.error != null && uiState.factoryDetail == null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = uiState.error ?: "加载失败", color = TextHint)
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillParentMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = uiState.error ?: "加载失败", color = TextHint)
+                }
             }
         } else {
-            // 看板区域
             uiState.factoryDetail?.let { detail ->
-                FactoryDashboard(
-                    country = detail.country,
-                    factoryNo = detail.factoryNo,
-                    productCount = detail.productCount,
-                    inquiryCount = detail.inquiryCount,
-                    recentOfferCount = detail.recentOfferCount
-                )
+                // 看板区域 - 非吸顶
+                item {
+                    FactoryDashboard(
+                        country = detail.country,
+                        factoryNo = detail.factoryNo,
+                        productCount = detail.productCount,
+                        inquiryCount = detail.inquiryCount,
+                        recentOfferCount = detail.recentOfferCount
+                    )
+                }
 
-                // 标签和排序
-                FactoryTabBar(
-                    selectedTab = uiState.selectedTab,
-                    selectedSort = uiState.selectedSort,
-                    onTabSelect = { viewModel.selectTab(it) },
-                    onSortSelect = { viewModel.selectSort(it) }
-                )
+                // 浅绿间隔 - 不吸顶，随内容滚动
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(Background)
+                    )
+                }
+
+                // Tab选择区域 - 吸顶
+                stickyHeader(key = "factory_tab") {
+                    FactoryTabBar(
+                        selectedTab = uiState.selectedTab,
+                        selectedSort = uiState.selectedSort,
+                        onTabSelect = { viewModel.selectTab(it) },
+                        onSortSelect = { viewModel.selectSort(it) }
+                    )
+                }
+
+                // 列表刷新指示器
+                if (uiState.isListRefreshing) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Primary, modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
 
                 // 产品列表
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    // 列表刷新时显示加载指示器
-                    if (uiState.isListRefreshing) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = Primary, modifier = Modifier.size(24.dp))
-                            }
+                items(uiState.currentProducts, key = { it.productId }) { product ->
+                    FactoryProductItem(
+                        product = product,
+                        isInquiryTab = uiState.selectedTab == 1,
+                        onClick = { onProductClick(country, factoryNo, product.productId, product.productName) }
+                    )
+                }
+
+                // 加载更多
+                if (uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Primary, modifier = Modifier.size(24.dp))
                         }
                     }
+                }
 
-                    items(uiState.currentProducts, key = { it.productId }) { product ->
-                        FactoryProductItem(
-                            product = product,
-                            isInquiryTab = uiState.selectedTab == 1,
-                            onClick = { onProductClick(country, factoryNo, product.productId, product.productName) }
-                        )
-                    }
-
-                    // 加载更多
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = Primary, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                    }
-
-                    // 没有更多了
-                    if (!uiState.hasMorePages && uiState.currentProducts.isNotEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = "没有更多了～", color = TextHint, fontSize = 11.sp)
-                            }
+                // 没有更多了
+                if (!uiState.hasMorePages && uiState.currentProducts.isNotEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "没有更多了～", color = TextHint, fontSize = 11.sp)
                         }
                     }
                 }
@@ -352,14 +371,6 @@ private fun FactoryTabBar(
             .fillMaxWidth()
             .background(Color.White)
     ) {
-        // 间隔
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Background)
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()

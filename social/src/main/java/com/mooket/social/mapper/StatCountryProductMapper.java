@@ -21,6 +21,9 @@ public interface StatCountryProductMapper extends BaseMapper<StatCountryProduct>
     @Delete({"DELETE FROM stat_country_product WHERE stat_date = #{statDate}"})
     void deleteByDate(@Param("statDate") LocalDate statDate);
 
+    @Delete({"DELETE FROM stat_country_product WHERE stat_date < CURRENT_DATE - INTERVAL '30 day'"})
+    int deleteOldRecords();
+
     @Select({"SELECT country, product_id, product_name, today_offer_count, today_factory_count, today_inquiry_count, price_min, price_max, avg_price, avg_price_yesterday, price_change, price_change_rate FROM stat_country_product WHERE stat_date = #{statDate} AND category = #{category} AND today_offer_count >= 10 ORDER BY today_offer_count DESC LIMIT #{limit}"})
     @Results({@Result(property = "country", column = "country"), @Result(property = "productId", column = "product_id"), @Result(property = "productName", column = "product_name"), @Result(property = "todayOfferCount", column = "today_offer_count"), @Result(property = "todayFactoryCount", column = "today_factory_count"), @Result(property = "todayInquiryCount", column = "today_inquiry_count"), @Result(property = "priceMin", column = "price_min"), @Result(property = "priceMax", column = "price_max"), @Result(property = "avgPrice", column = "avg_price"), @Result(property = "avgPriceYesterday", column = "avg_price_yesterday"), @Result(property = "priceChange", column = "price_change"), @Result(property = "priceChangeRate", column = "price_change_rate")})
     List<StatCountryProduct> findHotCountryProducts(@Param("statDate") LocalDate statDate, @Param("category") String category, @Param("limit") int limit);

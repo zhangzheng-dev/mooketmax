@@ -1,6 +1,15 @@
 package com.mooket.social.scheduler;
 
 import com.mooket.social.mapper.BizOfferMapper;
+import com.mooket.social.mapper.StatBrandMapper;
+import com.mooket.social.mapper.StatBrandProductMapper;
+import com.mooket.social.mapper.StatCountryMapper;
+import com.mooket.social.mapper.StatCountryProductMapper;
+import com.mooket.social.mapper.StatFactoryMapper;
+import com.mooket.social.mapper.StatFactoryProductMapper;
+import com.mooket.social.mapper.StatMerchantMapper;
+import com.mooket.social.mapper.StatPriceTrendMapper;
+import com.mooket.social.mapper.StatProductMapper;
 import com.mooket.social.service.BrandSyncService;
 import com.mooket.social.service.DataSyncService;
 import com.mooket.social.service.FactorySyncService;
@@ -29,6 +38,15 @@ public class DataSyncScheduler {
     private final BrandSyncService brandSyncService;
     private final MerchantSyncService merchantSyncService;
     private final BizOfferMapper bizOfferMapper;
+    private final StatProductMapper statProductMapper;
+    private final StatMerchantMapper statMerchantMapper;
+    private final StatCountryMapper statCountryMapper;
+    private final StatFactoryMapper statFactoryMapper;
+    private final StatCountryProductMapper statCountryProductMapper;
+    private final StatFactoryProductMapper statFactoryProductMapper;
+    private final StatBrandMapper statBrandMapper;
+    private final StatBrandProductMapper statBrandProductMapper;
+    private final StatPriceTrendMapper statPriceTrendMapper;
 
     // 标记是否已执行过首次同步（避免重复执行）
     private volatile boolean initialSyncExecuted = false;
@@ -41,13 +59,31 @@ public class DataSyncScheduler {
                             FactorySyncService factorySyncService,
                             BrandSyncService brandSyncService,
                             MerchantSyncService merchantSyncService,
-                            BizOfferMapper bizOfferMapper) {
+                            BizOfferMapper bizOfferMapper,
+                            StatProductMapper statProductMapper,
+                            StatMerchantMapper statMerchantMapper,
+                            StatCountryMapper statCountryMapper,
+                            StatFactoryMapper statFactoryMapper,
+                            StatCountryProductMapper statCountryProductMapper,
+                            StatFactoryProductMapper statFactoryProductMapper,
+                            StatBrandMapper statBrandMapper,
+                            StatBrandProductMapper statBrandProductMapper,
+                            StatPriceTrendMapper statPriceTrendMapper) {
         this.dataSyncService = dataSyncService;
         this.productSyncService = productSyncService;
         this.factorySyncService = factorySyncService;
         this.brandSyncService = brandSyncService;
         this.merchantSyncService = merchantSyncService;
         this.bizOfferMapper = bizOfferMapper;
+        this.statProductMapper = statProductMapper;
+        this.statMerchantMapper = statMerchantMapper;
+        this.statCountryMapper = statCountryMapper;
+        this.statFactoryMapper = statFactoryMapper;
+        this.statCountryProductMapper = statCountryProductMapper;
+        this.statFactoryProductMapper = statFactoryProductMapper;
+        this.statBrandMapper = statBrandMapper;
+        this.statBrandProductMapper = statBrandProductMapper;
+        this.statPriceTrendMapper = statPriceTrendMapper;
     }
 
     /**
@@ -135,6 +171,29 @@ public class DataSyncScheduler {
             System.out.println("[DataSyncScheduler] biz_offer 旧数据清理完成，删除了 " + deleted + " 条");
         } catch (Exception e) {
             System.err.println("[DataSyncScheduler] biz_offer 旧数据清理失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 每天 1:00 执行一次 stat_* 表旧数据清理
+     * 删除 stat_date < CURRENT_DATE - INTERVAL '30 day' 的数据（保留30天）
+     */
+    @Scheduled(cron = "0 0 1 * * ?")
+    public void cleanupOldStatData() {
+        System.out.println("[DataSyncScheduler] 开始执行 stat_* 表旧数据清理（保留30天）...");
+        try {
+            int deleted1 = statProductMapper.deleteOldRecords();
+            int deleted2 = statMerchantMapper.deleteOldRecords();
+            int deleted3 = statCountryMapper.deleteOldRecords();
+            int deleted4 = statFactoryMapper.deleteOldRecords();
+            int deleted5 = statCountryProductMapper.deleteOldRecords();
+            int deleted6 = statFactoryProductMapper.deleteOldRecords();
+            int deleted7 = statBrandMapper.deleteOldRecords();
+            int deleted8 = statBrandProductMapper.deleteOldRecords();
+            int deleted9 = statPriceTrendMapper.deleteOldRecords();
+            System.out.println("[DataSyncScheduler] stat_* 表旧数据清理完成: stat_product=" + deleted1 + ", stat_merchant=" + deleted2 + ", stat_country=" + deleted3 + ", stat_factory=" + deleted4 + ", stat_country_product=" + deleted5 + ", stat_factory_product=" + deleted6 + ", stat_brand=" + deleted7 + ", stat_brand_product=" + deleted8 + ", stat_price_trend=" + deleted9);
+        } catch (Exception e) {
+            System.err.println("[DataSyncScheduler] stat_* 表旧数据清理失败: " + e.getMessage());
         }
     }
 

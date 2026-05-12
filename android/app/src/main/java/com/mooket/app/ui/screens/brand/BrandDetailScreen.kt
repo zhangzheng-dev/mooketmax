@@ -1,6 +1,7 @@
 package com.mooket.app.ui.screens.brand
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,7 +39,7 @@ import java.util.Locale
  * 品牌详情页
  * 样式参考国家详情页，去除热门厂号/产品功能
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrandDetailScreen(
     brandName: String,
@@ -121,119 +122,135 @@ fun BrandDetailScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .padding(paddingValues)
+                .padding(paddingValues),
+            state = listState
         ) {
             if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Primary)
+                    }
                 }
             } else if (uiState.brandDetail != null) {
                 val detail = uiState.brandDetail!!
 
-                // 数据看板
-                BrandDashboard(
-                    brandName = detail.brandName,
-                    factoryCount = detail.factoryCount,
-                    productCount = detail.productCount,
-                    todayOfferCount = detail.todayOfferCount,
-                    yesterdayOfferCount = detail.yesterdayOfferCount,
-                    todayInquiryCount = detail.todayInquiryCount,
-                    yesterdayInquiryCount = detail.yesterdayInquiryCount,
-                    selectedTab = uiState.selectedTab
-                )
+                // 数据看板 - 非吸顶，随内容滚动
+                item {
+                    BrandDashboard(
+                        brandName = detail.brandName,
+                        factoryCount = detail.factoryCount,
+                        productCount = detail.productCount,
+                        todayOfferCount = detail.todayOfferCount,
+                        yesterdayOfferCount = detail.yesterdayOfferCount,
+                        todayInquiryCount = detail.todayInquiryCount,
+                        yesterdayInquiryCount = detail.yesterdayInquiryCount,
+                        selectedTab = uiState.selectedTab
+                    )
+                }
 
-                // Tab选择区域
-                BrandTabSection(
-                    selectedTab = uiState.selectedTab,
-                    selectedSort = uiState.selectedSort,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    onSortSelected = { viewModel.selectSort(it) }
-                )
+                // 浅绿间隔 - 不吸顶，随内容滚动
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                            .background(Color(0xFFF4FBF8))
+                    )
+                }
+
+                // Tab选择区域 - 吸顶
+                stickyHeader(key = "brand_tab") {
+                    BrandTabSection(
+                        selectedTab = uiState.selectedTab,
+                        selectedSort = uiState.selectedSort,
+                        onTabSelected = { viewModel.selectTab(it) },
+                        onSortSelected = { viewModel.selectSort(it) }
+                    )
+                }
 
                 // 列表内容
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
-                    if (uiState.isListRefreshing) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isListRefreshing) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
+                }
 
-                    itemsIndexed(
-                        items = uiState.currentSummaries,
-                        key = { _, summary -> summary.productId ?: summary.hashCode() }
-                    ) { index, summary ->
-                        BrandProductItem(
-                            summary = summary,
-                            isInquiryTab = uiState.selectedTab == 1,
-                            onClick = { onBrandProductClick(brandName, summary.productName ?: "", category) }
-                        )
-                    }
+                itemsIndexed(
+                    items = uiState.currentSummaries,
+                    key = { _, summary -> summary.productId ?: summary.hashCode() }
+                ) { index, summary ->
+                    BrandProductItem(
+                        summary = summary,
+                        isInquiryTab = uiState.selectedTab == 1,
+                        onClick = { onBrandProductClick(brandName, summary.productName ?: "", category) }
+                    )
+                }
 
-                    if (uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = Primary,
-                                    strokeWidth = 2.dp
-                                )
-                            }
+                if (uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Primary,
+                                strokeWidth = 2.dp
+                            )
                         }
                     }
+                }
 
-                    if (!uiState.hasMorePages && !uiState.isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "没有更多了～",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF9DA4A3)
-                                )
-                            }
+                if (!uiState.hasMorePages && !uiState.isLoadingMore) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "没有更多了～",
+                                fontSize = 11.sp,
+                                color = Color(0xFF9DA4A3)
+                            )
                         }
                     }
                 }
             } else if (uiState.error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.error ?: "加载失败",
-                        fontSize = 14.sp,
-                        color = TextHint
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = uiState.error ?: "加载失败",
+                            fontSize = 14.sp,
+                            color = TextHint
+                        )
+                    }
                 }
             }
         }
@@ -362,14 +379,7 @@ private fun BrandTabSection(
     onTabSelected: (Int) -> Unit,
     onSortSelected: (String) -> Unit
 ) {
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .background(Color(0xFFF4FBF8))
-        )
-
+    Column(modifier = Modifier.background(Color.White)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

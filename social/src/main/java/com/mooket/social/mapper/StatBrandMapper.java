@@ -31,6 +31,9 @@ public interface StatBrandMapper extends BaseMapper<StatBrand> {
     @Delete({"DELETE FROM stat_brand WHERE stat_date = #{statDate}"})
     void deleteByDate(@Param("statDate") LocalDate statDate);
 
+    @Delete({"DELETE FROM stat_brand WHERE stat_date < CURRENT_DATE - INTERVAL '30 day'"})
+    int deleteOldRecords();
+
     @Select({"SELECT brand_id, brand_name, today_offer_count, today_factory_count, today_product_count FROM stat_brand WHERE stat_date = #{statDate} AND today_offer_count >= 10 ORDER BY today_offer_count DESC LIMIT #{limit}"})
     @Results({@Result(property = "brandId", column = "brand_id"), @Result(property = "brandName", column = "brand_name"), @Result(property = "todayOfferCount", column = "today_offer_count"), @Result(property = "factoryCount", column = "today_factory_count"), @Result(property = "productCount", column = "today_product_count")})
     List<HotBrand> findHotBrands(@Param("statDate") LocalDate statDate, @Param("limit") int limit);

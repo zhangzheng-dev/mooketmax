@@ -72,7 +72,8 @@ app/src/main/java/com/mooket/app/
 │   ├── screens/product/         # ProductDetailScreen, ProductDetailViewModel
 │   ├── screens/country/        # CountryDetailScreen
 │   ├── screens/factory/         # FactoryDetailScreen
-│   └── screens/countryproduct/  # CountryProductScreen, CountryProductViewModel
+│   ├── screens/countryproduct/  # CountryProductScreen, CountryProductViewModel
+│   └── screens/profile/          # ProfileScreen, ProfileViewModel (个人中心)
 └── data/
     ├── model/Models.kt          # 数据类
     ├── api/ApiService.kt        # Retrofit API
@@ -171,6 +172,9 @@ POST /api/v1/sync/biz-offer/full   # 报盘全量同步
 | `SearchServiceImpl.java` | 搜索服务核心实现 |
 | `MerchantServiceImpl.java` | 商家详情服务 |
 | `SocialApplication.java` | 主数据源配置 |
+| `AppController.java` | App版本检查 + APK下载接口 |
+| `UserController.java` | 用户资料（含mooketNo） |
+| `AuthController.java` | 登录注册（含UAC mooket_no回填） |
 
 ## API 接口
 
@@ -180,6 +184,9 @@ POST /api/v1/sync/biz-offer/full   # 报盘全量同步
 | `/api/v1/merchant/{id}?category=牛` | GET | 商家详情（按分类过滤） |
 | `/api/v1/product/{id}?category=牛&offerType=offer` | GET | 产品详情（带分页） |
 | `/api/v1/factory/filter?category=牛` | GET | 厂号筛选数据 |
+| `/api/v1/app/version` | GET | App版本检查（返回versionCode/hasUpdate/updateUrl） |
+| `/api/v1/app/download/apk` | GET | APK文件下载（用于应用内更新） |
+| `/api/v1/user/profile` | GET | 用户资料（含mooketNo） |
 | `POST /api/v1/sync/*` | POST | 数据同步接口 |
 
 **统一响应格式**：

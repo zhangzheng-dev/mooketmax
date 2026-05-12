@@ -29,6 +29,7 @@ public class UserController {
     private com.mooket.social.mapper.BizSearchHistoryMapper bizSearchHistoryMapper;
 
     private static final String AVATAR_DIR = "/tmp/mooket/avatar/";
+    private static final String AVATAR_BASE_URL = "http://43.139.56.124:8080";
 
     /**
      * 获取用户资料
@@ -47,10 +48,16 @@ public class UserController {
         }
 
         Map<String, Object> data = new HashMap<>();
-        data.put("avatarUrl", user.getAvatarUrl());
+        String avatarUrl = user.getAvatarUrl();
+        // 拼接完整URL（如果是相对路径）
+        if (avatarUrl != null && avatarUrl.startsWith("/avatar/")) {
+            avatarUrl = AVATAR_BASE_URL + avatarUrl;
+        }
+        data.put("avatarUrl", avatarUrl);
         data.put("nickname", user.getNickname());
         data.put("phone", user.getPhone());
         data.put("mooketId", user.getMooketId());
+        data.put("mooketNo", user.getMooketNo());
         data.put("realNameStatus", user.getRealNameStatus());
         data.put("realName", user.getRealName());
 
@@ -140,17 +147,17 @@ public class UserController {
             return ApiResponse.error(500, "上传失败");
         }
 
-        // 更新数据库头像URL
+        // 更新数据库头像URL（存相对路径）
+        String avatarUrlPath = "/avatar/" + filename;
         DictUser user = dictUserMapper.selectById(userId);
         if (user != null) {
-            String avatarUrl = AVATAR_DIR + filename;
-            user.setAvatarUrl(avatarUrl);
+            user.setAvatarUrl(avatarUrlPath);
             user.setUpdateTime(java.time.LocalDateTime.now());
             dictUserMapper.updateById(user);
         }
 
         Map<String, String> data = new HashMap<>();
-        data.put("avatarUrl", AVATAR_DIR + filename);
+        data.put("avatarUrl", avatarUrlPath);
         data.put("message", "上传成功");
         return ApiResponse.success(data);
     }
