@@ -15,6 +15,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import com.mooket.app.ui.screens.home.HomeScreen
 import com.mooket.app.ui.screens.home.HomeCardsScreen
 import com.mooket.app.ui.screens.merchant.MerchantScreen
@@ -99,8 +104,8 @@ fun MooketNavHost(
     navController: NavHostController = rememberNavController(),
     context: Context
 ) {
-    // 防抖：防止快速连续 popBackStack/navigate 导致白屏
-    val navDebounceMs = 300L
+    // 防抖：防止快速连续 popBackStack/navigate 导致白屏（已禁用，保留变量避免编译错误）
+    val navDebounceMs = 0L
     var lastNavTime by remember { mutableLongStateOf(0L) }
     fun safePopBackStack(): Boolean {
         val now = System.currentTimeMillis()
@@ -129,7 +134,31 @@ fun MooketNavHost(
 
     NavHost(
         navController = navController,
-        startDestination = if (SessionManager.isLoggedIn()) Screen.Home.route else Screen.Login.route
+        startDestination = if (SessionManager.isLoggedIn()) Screen.Home.route else Screen.Login.route,
+        enterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { it },
+                animationSpec = tween(durationMillis = 100, easing = LinearEasing)
+            )
+        },
+        exitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { it },
+                animationSpec = tween(durationMillis = 100, easing = LinearEasing)
+            )
+        },
+        popEnterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { -it },
+                animationSpec = tween(durationMillis = 100, easing = LinearEasing)
+            )
+        },
+        popExitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { it },
+                animationSpec = tween(durationMillis = 100, easing = LinearEasing)
+            )
+        }
     ) {
         // 登录页
         composable(Screen.Login.route) {

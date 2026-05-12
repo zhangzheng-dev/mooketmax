@@ -121,11 +121,20 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         int rank = 1;
         LocalDate today = LocalDate.now();
 
+        // 用于去重的 key 集合（防止同一实体被多个搜索历史重复添加）
+        java.util.Set<String> seenEntityKeys = new java.util.HashSet<>();
+
         for (BizSearchHistory history : histories) {
             HomeCardItemDTO card = buildCardFromHistory(history, category, today, rank);
             if (card != null) {
-                cards.add(card);
-                rank++;
+                // 去重：根据卡片的实体类型和 ID 过滤重复
+                String entityKey = getCardEntityKey(card);
+                if (entityKey != null && !seenEntityKeys.contains(entityKey)) {
+                    seenEntityKeys.add(entityKey);
+                    card.setRank(rank);
+                    cards.add(card);
+                    rank++;
+                }
             }
             if (cards.size() >= 20) break; // 最多20张卡片
         }
@@ -133,6 +142,38 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         response.setCards(cards);
         response.setUpdateTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
         return response;
+    }
+
+    /**
+     * 根据卡片类型获取实体唯一标识 key，用于去重
+     */
+    private String getCardEntityKey(HomeCardItemDTO card) {
+        String cardType = card.getCardType();
+        if (cardType == null) return null;
+        switch (cardType) {
+            case "merchant":
+                return "merchant:" + ((MerchantCardDTO) card).getMerchantId();
+            case "brand":
+                return "brand:" + ((BrandCardDTO) card).getBrandId();
+            case "product":
+                return "product:" + ((ProductCardDTO) card).getProductId();
+            case "factory":
+                FactoryCardDTO fc = (FactoryCardDTO) card;
+                return "factory:" + fc.getCountry() + ":" + fc.getFactoryNo();
+            case "countryProduct":
+                CountryProductCardDTO cpc = (CountryProductCardDTO) card;
+                return "countryProduct:" + cpc.getCountry() + ":" + cpc.getProductName();
+            case "factoryProduct":
+                FactoryProductCardDTO fpc = (FactoryProductCardDTO) card;
+                return "factoryProduct:" + fpc.getCountry() + ":" + fpc.getFactoryNo() + ":" + fpc.getProductName();
+            case "brandProduct":
+                BrandProductCardDTO bpc = (BrandProductCardDTO) card;
+                return "brandProduct:" + bpc.getBrandId() + ":" + bpc.getProductName();
+            case "country":
+                return "country:" + ((CountryCardDTO) card).getCountry();
+            default:
+                return null;
+        }
     }
 
     private HomeCardItemDTO buildCardFromHistory(BizSearchHistory history, String category, LocalDate today, int rank) {
@@ -412,6 +453,10 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
             latestOfferDTOs.add(dto);
         }
         card.setLatestOffers(latestOfferDTOs);
+        // 无最新报盘数据则不显示该卡片
+        if (latestOfferDTOs.isEmpty()) {
+            return null;
+        }
         return card;
     }
 

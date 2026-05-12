@@ -320,8 +320,14 @@ fun SearchScreen(
                             SearchHistoryChip(
                                 keyword = historyItem,
                                 onClick = {
-                                    viewModel.updateKeyword(historyItem, category)
-                                    viewModel.addToHistory(historyItem)
+                                    // 提取标准名（去掉别名后缀），确保搜索联想词能匹配
+                                    val standardKeyword = if (historyItem.contains("(别名：")) {
+                                        historyItem.substring(0, historyItem.indexOf("(别名："))
+                                    } else {
+                                        historyItem
+                                    }
+                                    viewModel.updateKeyword(standardKeyword, category)
+                                    viewModel.addToHistory(standardKeyword)
                                 }
                             )
                         }

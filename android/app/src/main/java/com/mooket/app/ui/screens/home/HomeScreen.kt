@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -85,7 +86,7 @@ fun HomeScreen(
     // 滚动状态 - 用于固定头部 + FAB显示/隐藏
     val lazyListState = rememberLazyListState()
     val fabVisible by remember { derivedStateOf { lazyListState.firstVisibleItemIndex > 0 || lazyListState.firstVisibleItemScrollOffset > 0 } }
-    val fabScale by animateFloatAsState(if (fabVisible) 1f else 0f, label = "fabScale")
+    val fabScale by animateFloatAsState(if (fabVisible) 1f else 0f, label = "fabScale", animationSpec = tween(durationMillis = 100))
     val coroutineScope = rememberCoroutineScope()
 
     // 监听生命周期：返回首页时自动刷新卡片数据

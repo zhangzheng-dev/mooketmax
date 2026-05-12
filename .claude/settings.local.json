@@ -42,7 +42,8 @@
       "Bash(./gradlew :app:assembleDebug:*)",
       "mcp__figma__get_screenshot",
       "Bash(mvn compile:*)",
-      "Skill(ssh-skill)"
+      "Skill(ssh-skill)",
+      "Bash(\"/c/Users/zhangzheng/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat:*)"
     ]
   }
 }

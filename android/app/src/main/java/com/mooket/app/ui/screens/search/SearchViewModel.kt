@@ -39,7 +39,22 @@ class SearchViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             repository.getRecentSearches(limit = 20)
                 .onSuccess { histories ->
-                    val words = histories.map { it.searchWord }.distinct().take(10)
+                    // 按实体（商家ID/品牌ID/产品ID等）去重，而非按搜索词精确去重
+                    // 两个搜索词 "河南冠乐" 和 "河南冠乐(别名：xxx)" 指向同一个实体，只保留一个
+                    val seenEntityIds = mutableSetOf<String>()
+                    val words = histories.mapNotNull { history ->
+                        val searchWord = history.searchWord
+                        // 提取标准名（去掉别名后缀）
+                        val standardWord = if (searchWord.contains("(别名：")) {
+                            searchWord.substring(0, searchWord.indexOf("(别名："))
+                        } else {
+                            searchWord
+                        }
+                        // 用实体ID去重（商家用merchantId，产品用productId等）
+                        val entityId = history.merchantId?.toString() ?: history.productId?.toString()
+                            ?: history.brandId?.toString() ?: standardWord
+                        if (entityId.isNotEmpty() && seenEntityIds.add(entityId)) standardWord else null
+                    }.take(10)
                     _uiState.update { it.copy(searchHistory = words) }
                 }
                 .onFailure {

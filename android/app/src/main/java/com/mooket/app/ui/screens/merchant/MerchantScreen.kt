@@ -629,7 +629,7 @@ private fun MerchantContent(
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "no data", color = TextHint)
+                        Text(text = "暂无数据", fontSize = 14.sp, color = TextHint)
                     }
                 }
             } else {
@@ -671,14 +671,14 @@ private fun MerchantContent(
                                 ) {
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Primary, strokeWidth = 2.dp)
                                     Spacer(modifier = Modifier.width(12.dp))
-                                    Text(text = "loading...", fontSize = 14.sp, color = Primary)
+                                    Text(text = "加载中...", fontSize = 14.sp, color = Primary)
                                 }
                             }
                             hasMorePages -> {
-                                Text(text = "load more", fontSize = 12.sp, color = Color(0xFF9DA4A3))
+                                Text(text = "加载更多", fontSize = 12.sp, color = Color(0xFF9DA4A3))
                             }
                             else -> {
-                                Text(text = "no more", fontSize = 12.sp, color = Color(0xFF9DA4A3))
+                                Text(text = "没有更多了～", fontSize = 12.sp, color = Color(0xFF9DA4A3))
                             }
                         }
                     }
