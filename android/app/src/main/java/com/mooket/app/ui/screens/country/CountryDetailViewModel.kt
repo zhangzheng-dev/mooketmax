@@ -78,7 +78,6 @@ class CountryDetailViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true, error = null) }
-            delay(50)
 
             val type = if (state.selectedTab == 0) "offer" else "inquiry"
             val nextPage = state.currentPage + 1

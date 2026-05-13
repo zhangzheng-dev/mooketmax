@@ -568,7 +568,8 @@ data class SendCodeRequest(
  */
 data class LoginRequest(
     val phone: String,
-    val code: String
+    val code: String,
+    val deviceId: String? = null
 )
 
 /**
@@ -586,7 +587,10 @@ data class AuthResult(
     val token: String,
     val isNewUser: Boolean,
     val userId: Long? = null,
-    val nickname: String? = null
+    val nickname: String? = null,
+    val gatewayAccessToken: String? = null,
+    val gatewayUserId: String? = null,
+    val mooketId: String? = null
 )
 
 /**

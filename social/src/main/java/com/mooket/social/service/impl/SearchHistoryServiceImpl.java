@@ -176,6 +176,58 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         }
     }
 
+    /**
+     * 检查卡片是否有有效的统计数据
+     * 如果 stat 表中没有今日数据，过滤掉该卡片避免显示"--"
+     */
+    private boolean hasValidStatData(HomeCardItemDTO card) {
+        String cardType = card.getCardType();
+        if (cardType == null) return false;
+
+        switch (cardType) {
+            case "country": {
+                CountryCardDTO c = (CountryCardDTO) card;
+                return c.getTodayOfferCount() != null && c.getTodayOfferCount() > 0;
+            }
+            case "brand": {
+                BrandCardDTO b = (BrandCardDTO) card;
+                return b.getTodayOfferCount() != null && b.getTodayOfferCount() > 0;
+            }
+            case "factory": {
+                FactoryCardDTO f = (FactoryCardDTO) card;
+                // stat_factory 无数据但 biz_offer 有热门产品时也放行
+                if (f.getTodayOfferCount() != null && f.getTodayOfferCount() > 0) return true;
+                return f.getHotProducts() != null && !f.getHotProducts().isEmpty();
+            }
+            case "countryProduct": {
+                CountryProductCardDTO cp = (CountryProductCardDTO) card;
+                // stat_country_product 无数据但 biz_offer 有热门厂号时也放行
+                if (cp.getTodayOfferCount() != null && cp.getTodayOfferCount() > 0) return true;
+                return cp.getTopFactories() != null && !cp.getTopFactories().isEmpty();
+            }
+            case "brandProduct": {
+                BrandProductCardDTO bp = (BrandProductCardDTO) card;
+                if (bp.getTodayOfferCount() != null && bp.getTodayOfferCount() > 0) return true;
+                // stat_brand_product 无数据但有热门厂号时也放行
+                return bp.getHotFactories() != null && !bp.getHotFactories().isEmpty();
+            }
+            case "factoryProduct": {
+                FactoryProductCardDTO fp = (FactoryProductCardDTO) card;
+                return fp.getTodayOfferCount() != null && fp.getTodayOfferCount() > 0;
+            }
+            case "product": {
+                ProductCardDTO p = (ProductCardDTO) card;
+                return p.getTodayOfferCount() != null && p.getTodayOfferCount() > 0;
+            }
+            case "merchant": {
+                MerchantCardDTO m = (MerchantCardDTO) card;
+                return m.getTodayOfferCount() != null && m.getTodayOfferCount() > 0;
+            }
+            default:
+                return true; // 其他类型默认通过
+        }
+    }
+
     private HomeCardItemDTO buildCardFromHistory(BizSearchHistory history, String category, LocalDate today, int rank) {
         String type = history.getSearchType();
         if (type == null) return null;
@@ -466,10 +518,25 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         // 如果字段为 NULL，尝试从 searchWord 解析
         if (factoryNo == null || country == null) {
             String keyword = history.getSearchWord();
-            int idx = parseCountryAndFactory(keyword);
-            if (idx > 0) {
-                country = keyword.substring(0, idx);
-                factoryNo = keyword.substring(idx);
+            // 优先用 extractCountry 提取国家名（处理"阿根廷1014"等中文国家名）
+            if (country == null) {
+                country = extractCountry(keyword);
+            }
+            // 然后处理厂号：从 keyword 中找字母+数字模式
+            if (factoryNo == null) {
+                int idx = parseCountryAndFactory(keyword);
+                if (idx > 0) {
+                    factoryNo = keyword.substring(idx);
+                }
+                // 如果 factoryNo 为空或不是有效的厂号格式（不以数字开头），用剩余部分
+                if (factoryNo == null || factoryNo.isEmpty() || !Character.isDigit(factoryNo.charAt(0))) {
+                    if (country != null && !country.isEmpty()) {
+                        String remaining = keyword.substring(country.length()).trim();
+                        if (!remaining.isEmpty()) {
+                            factoryNo = remaining;
+                        }
+                    }
+                }
             }
         }
         if (factoryNo == null) return null;
@@ -486,16 +553,14 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         card.setFactoryNo(stat != null && stat.getFactoryNo() != null ? stat.getFactoryNo() : factoryNo);
         card.setTodayOfferCount(stat != null ? stat.getTodayOfferCount() : null);
 
-        // 热门产品
-        List<FactoryProductStatDTO> factoryProducts = bizOfferMapper.aggregateByFactoryProduct(today);
+        // 热门产品（按 country + factoryNo 精确过滤）
+        List<FactoryProductStatDTO> factoryProducts = bizOfferMapper.aggregateByFactoryProductFiltered(today, card.getCountry(), card.getFactoryNo());
         List<FactoryCardDTO.HotProductDTO> hotProductsList = new ArrayList<>();
         for (FactoryProductStatDTO fp : factoryProducts) {
-            if (factoryNo.equals(fp.getFactoryNo())) {
-                FactoryCardDTO.HotProductDTO dto = new FactoryCardDTO.HotProductDTO();
-                dto.setProductName(fp.getProductName());
-                dto.setOfferCount(fp.getTodayOfferCount());
-                hotProductsList.add(dto);
-            }
+            FactoryCardDTO.HotProductDTO dto = new FactoryCardDTO.HotProductDTO();
+            dto.setProductName(fp.getProductName());
+            dto.setOfferCount(fp.getTodayOfferCount());
+            hotProductsList.add(dto);
         }
         hotProductsList.sort((a, b) -> Integer.compare(
                 b.getOfferCount() != null ? b.getOfferCount() : 0,

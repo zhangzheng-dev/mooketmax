@@ -69,7 +69,7 @@ fun CountryProductScreen(
     }
 
     // Infinite scroll - detect when near bottom
-    val shouldLoadMore = !listState.canScrollForward
+    val shouldLoadMore = !listState.canScrollForward && uiState.factories.isNotEmpty()
 
     LaunchedEffect(shouldLoadMore, uiState.hasMorePages, uiState.isLoadingMore) {
         if (shouldLoadMore && uiState.hasMorePages && !uiState.isLoadingMore) {
@@ -199,7 +199,7 @@ fun CountryProductScreen(
                 // 厂号列表
                 itemsIndexed(
                     items = uiState.factories,
-                    key = { _, factory -> factory.factoryNo ?: factory.hashCode() }
+                    key = { index, _ -> index }
                 ) { index, factory ->
                     FactoryItem(
                         factory = factory,
@@ -337,10 +337,10 @@ private fun CountryProductDashboard(
                         )
                     } else {
                         Text(
-                            text = "暂无报价",
+                            text = "协商报价",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Primary
+                            color = TextHint
                         )
                     }
 
@@ -789,9 +789,10 @@ private fun FactoryItem(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Row(verticalAlignment = Alignment.Bottom) {
-                    if (factory.priceMin != null && factory.priceMax != null) {
+                    val hasValidPrice = factory.priceMin != null && factory.priceMax != null && factory.priceMin > 0 && factory.priceMax > 0
+                    if (hasValidPrice) {
                         Text(
-                            text = "¥ ${formatPrice(factory.priceMin)} - ${formatPrice(factory.priceMax)}",
+                            text = "¥ ${formatPrice(factory.priceMin!!)} - ${formatPrice(factory.priceMax!!)}",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Primary
@@ -801,6 +802,13 @@ private fun FactoryItem(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Normal,
                             color = TextPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "协商报价",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextHint
                         )
                     }
                 }

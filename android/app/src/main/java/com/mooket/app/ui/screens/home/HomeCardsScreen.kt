@@ -317,35 +317,21 @@ private fun HomeCard(
             )
             "brandProduct" -> BrandProductCard(
                 card = card,
-                onClick = {
-                    card.brandName?.let { brandName ->
-                        card.productName?.let { productName ->
-                            onBrandProductClick(brandName, productName, category)
-                        }
-                    }
-                }
+                onClick = if (card.brandName == null || card.productName == null) null else ({
+                    onBrandProductClick(card.brandName!!, card.productName!!, category)
+                })
             )
             "factoryProduct" -> FactoryProductCard(
                 card = card,
-                onClick = {
-                    card.country?.let { country ->
-                        card.factoryNo?.let { factoryNo ->
-                            card.productName?.let { productName ->
-                                onCountryFactoryProductClick(country, factoryNo, productName, category)
-                            }
-                        }
-                    }
-                }
+                onClick = if (card.country == null || card.factoryNo == null || card.productName == null) null else ({
+                    onCountryFactoryProductClick(card.country!!, card.factoryNo!!, card.productName!!, category)
+                })
             )
             "countryProduct" -> CountryProductCard(
                 card = card,
-                onClick = {
-                    card.country?.let { country ->
-                        card.productName?.let { productName ->
-                            onCountryProductClick(country, productName, category)
-                        }
-                    }
-                }
+                onClick = if (card.country == null || card.productName == null) null else ({
+                    onCountryProductClick(card.country!!, card.productName!!, category)
+                })
             )
             else -> {
                 // Unknown card type, render empty box

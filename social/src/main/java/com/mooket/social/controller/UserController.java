@@ -41,8 +41,12 @@ public class UserController {
             return ApiResponse.error(401, "Token无效");
         }
 
-        Long userId = JwtUtil.getUserId(token);
-        DictUser user = dictUserMapper.selectById(userId);
+        String phone = JwtUtil.getPhone(token);
+        DictUser user = dictUserMapper.selectOne(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictUser>()
+                .eq("phone", phone)
+                .eq("cancellation_status", "active")
+        );
         if (user == null) {
             return ApiResponse.error(404, "用户不存在");
         }
@@ -85,8 +89,12 @@ public class UserController {
             return ApiResponse.error(401, "Token无效");
         }
 
-        Long userId = JwtUtil.getUserId(token);
-        DictUser user = dictUserMapper.selectById(userId);
+        String phone = JwtUtil.getPhone(token);
+        DictUser user = dictUserMapper.selectOne(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictUser>()
+                .eq("phone", phone)
+                .eq("cancellation_status", "active")
+        );
         if (user == null) {
             return ApiResponse.error(404, "用户不存在");
         }
@@ -203,8 +211,12 @@ public class UserController {
             return ApiResponse.error(401, "Token无效");
         }
 
-        Long userId = JwtUtil.getUserId(token);
-        DictUser user = dictUserMapper.selectById(userId);
+        String phone = JwtUtil.getPhone(token);
+        DictUser user = dictUserMapper.selectOne(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DictUser>()
+                .eq("phone", phone)
+                .eq("cancellation_status", "active")
+        );
         if (user == null) {
             return ApiResponse.error(404, "用户不存在");
         }
@@ -217,7 +229,7 @@ public class UserController {
         // 2. 删除该用户关联的所有搜索历史
         if (bizSearchHistoryMapper != null) {
             bizSearchHistoryMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.mooket.social.entity.BizSearchHistory>()
-                    .eq("user_id", userId));
+                    .eq("user_id", user.getUserId()));
         }
 
         Map<String, String> data = new HashMap<>();

@@ -131,7 +131,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatProduct> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statProductMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statProductMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -190,7 +194,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatCountry> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statCountryMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statCountryMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -327,7 +335,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatFactory> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statFactoryMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statFactoryMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -379,7 +391,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatBrand> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statBrandMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statBrandMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -455,7 +471,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatCountryProduct> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statCountryProductMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statCountryProductMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -464,10 +484,23 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeBrandProductStats(LocalDate statDate) {
         log.info("计算品牌产品维度统计，日期：{}", statDate);
 
-        // 按 brandId + productId 去重，stat_brand_product 主键是 (stat_date, brand_id, product_id)
         Map<String, StatBrandProduct> statsMap = new LinkedHashMap<>();
 
+        // 查昨日 stat_brand_product 数据，用于回填 avgPriceYesterday
+        Map<String, BigDecimal> yesterdayAvgPriceMap = new HashMap<>();
         List<BrandProductStatDTO> rows = bizOfferMapper.aggregateByBrandProduct(statDate);
+        for (BrandProductStatDTO row : rows) {
+            if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
+            if (row.getBrandName() == null) continue;
+            String key = row.getBrandId() + "|" + row.getProductId();
+            if (!statsMap.containsKey(key)) {
+                StatBrandProduct yesterdayStat = statBrandProductMapper.selectByBrandIdAndProductId(row.getBrandId(), row.getProductId());
+                if (yesterdayStat != null && yesterdayStat.getAvgPrice() != null) {
+                    yesterdayAvgPriceMap.put(key, yesterdayStat.getAvgPrice());
+                }
+            }
+        }
+
         for (BrandProductStatDTO row : rows) {
             if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
             if (row.getBrandName() == null) continue;
@@ -489,11 +522,11 @@ public class HomeStatServiceImpl implements HomeStatService {
                 if (row.getAvgPriceYesterday() != null) {
                     existing.setAvgPriceYesterday(row.getAvgPriceYesterday());
                 }
+                recomputePriceChange(existing);
             } else {
                 StatBrandProduct stat = new StatBrandProduct();
                 stat.setStatDate(statDate);
                 stat.setBrandId(row.getBrandId());
-                // 从dict_brand表获取brandName
                 String brandName = row.getBrandName();
                 DictBrand brand = dictBrandMapper.selectById(row.getBrandId());
                 if (brand != null && brand.getBrandName() != null) {
@@ -507,25 +540,13 @@ public class HomeStatServiceImpl implements HomeStatService {
                 stat.setPriceMin(row.getPriceMin());
                 stat.setPriceMax(row.getPriceMax());
                 stat.setAvgPrice(row.getAvgPrice());
-                stat.setAvgPriceYesterday(row.getAvgPriceYesterday());
-                if (row.getAvgPrice() != null && row.getAvgPriceYesterday() != null
-                        && row.getAvgPriceYesterday().compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal priceChange = row.getAvgPrice().subtract(row.getAvgPriceYesterday());
-                    // price_change in DB is DECIMAL(10,2), max |value| < 1000
-                    if (priceChange.abs().compareTo(new BigDecimal("999.99")) > 0) {
-                        priceChange = priceChange.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
-                    }
-                    stat.setPriceChange(priceChange);
-                    BigDecimal rate = priceChange
-                            .divide(row.getAvgPriceYesterday(), 4, RoundingMode.HALF_UP)
-                            .multiply(BigDecimal.valueOf(100))
-                            .setScale(2, RoundingMode.HALF_UP);
-                    // price_change_rate in DB is DECIMAL(5,2), max |value| < 1000
-                    if (rate.abs().compareTo(new BigDecimal("999.99")) > 0) {
-                        rate = rate.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
-                    }
-                    stat.setPriceChangeRate(rate);
+                // 优先用 SQL 查出的昨日均值，否则用 stat_brand_product 昨日记录回填
+                BigDecimal avgPriceYesterday = row.getAvgPriceYesterday();
+                if (avgPriceYesterday == null) {
+                    avgPriceYesterday = yesterdayAvgPriceMap.get(key);
                 }
+                stat.setAvgPriceYesterday(avgPriceYesterday);
+                recomputePriceChange(stat);
                 stat.setUpdateTime(LocalDateTime.now());
                 statsMap.put(key, stat);
             }
@@ -533,9 +554,36 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatBrandProduct> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statBrandProductMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statBrandProductMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
+
+    private void recomputePriceChange(StatBrandProduct stat) {
+        if (stat.getAvgPrice() != null && stat.getAvgPriceYesterday() != null
+                && stat.getAvgPriceYesterday().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal priceChange = stat.getAvgPrice().subtract(stat.getAvgPriceYesterday());
+            if (priceChange.abs().compareTo(new BigDecimal("999.99")) > 0) {
+                priceChange = priceChange.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+            }
+            stat.setPriceChange(priceChange);
+            BigDecimal rate = priceChange
+                    .divide(stat.getAvgPriceYesterday(), 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (rate.abs().compareTo(new BigDecimal("999.99")) > 0) {
+                rate = rate.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+            }
+            stat.setPriceChangeRate(rate);
+        } else {
+            stat.setPriceChange(null);
+            stat.setPriceChangeRate(null);
+        }
+    }
+
 
     @Override
     @Transactional
@@ -609,7 +657,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatFactoryProduct> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statFactoryProductMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statFactoryProductMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 
@@ -653,7 +705,11 @@ public class HomeStatServiceImpl implements HomeStatService {
 
         List<StatMerchant> allStats = new ArrayList<>(statsMap.values());
         if (!allStats.isEmpty()) {
-            statMerchantMapper.batchUpsert(allStats);
+            int batchSize = 1000;
+            for (int i = 0; i < allStats.size(); i += batchSize) {
+                int end = Math.min(i + batchSize, allStats.size());
+                statMerchantMapper.batchUpsert(allStats.subList(i, end));
+            }
         }
     }
 

@@ -16,7 +16,7 @@ public interface UacUserMapper {
      * 条件：is_cancel=0 AND enable=1 AND is_deleted=0
      */
     @Select("SELECT id, user_no, user_muji_no, user_type, user_category, mobile_no, nick_name, " +
-            "user_name, anonymous_name, is_cancel, enable, is_deleted, created_time, update_time " +
+            "user_name, anonymous_name, anonymous_face_url, is_identification, is_cancel, enable, is_deleted, created_time, update_time " +
             "FROM uac_user WHERE mobile_no = #{phone} AND is_cancel = 0 AND enable = 1 AND is_deleted = 0 " +
             "ORDER BY id DESC LIMIT 1")
     UacUser selectByPhone(@Param("phone") String phone);

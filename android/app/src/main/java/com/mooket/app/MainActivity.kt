@@ -1,5 +1,6 @@
 package com.mooket.app
 
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,10 @@ import com.mooket.app.navigation.MooketNavHost
 import com.mooket.app.ui.theme.MooketTheme
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        lateinit var appContext: Context
+            private set
+    }
     // 延迟 finish 到下一帧，避免与 Compose 导航动画/vsync 时序冲突导致白屏
     private val finishHandler = Handler(Looper.getMainLooper())
 
@@ -32,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
         // 初始化 SessionManager（恢复登录态）
         SessionManager.init(this)
+        appContext = applicationContext
 
         setContent {
             val navController = rememberNavController()

@@ -75,6 +75,7 @@ fun HomeScreen(
     onBrandProductClick: (String, String, String) -> Unit,
     onHomeCardsClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    onInventoryClick: () -> Unit = {},
     viewModel: HomeViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -212,7 +213,11 @@ fun HomeScreen(
                     contentDescription = "MooketMax Logo",
                     modifier = Modifier.height(14.645.dp).width(90.dp)
                 )
-                Icon(imageVector = Icons.Outlined.Person, contentDescription = "个人中心", tint = TextPrimary, modifier = Modifier.size(24.dp).clickable { onProfileClick() })
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Inventory2, contentDescription = "库存", tint = Primary, modifier = Modifier.size(24.dp).clickable { onInventoryClick() })
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Icon(imageVector = Icons.Outlined.Person, contentDescription = "个人中心", tint = TextPrimary, modifier = Modifier.size(24.dp).clickable { onProfileClick() })
+                }
             }
 
             // 搜索框
@@ -824,12 +829,8 @@ private fun HomeCardItemView(
             )
             "brandProduct" -> com.mooket.app.ui.screens.home.cards.BrandProductCard(
                 card = card,
-                onClick = if (isExample) null else ({
-                    card.brandName?.let { brandName ->
-                        card.productName?.let { productName ->
-                            onBrandProductClick(brandName, productName, category)
-                        }
-                    }
+                onClick = if (isExample || card.brandName == null || card.productName == null) null else ({
+                    onBrandProductClick(card.brandName!!, card.productName!!, category)
                 }),
                 isExample = isExample
             )
@@ -848,12 +849,8 @@ private fun HomeCardItemView(
             )
             "countryProduct" -> com.mooket.app.ui.screens.home.cards.CountryProductCard(
                 card = card,
-                onClick = if (isExample) null else ({
-                    card.country?.let { country ->
-                        card.productName?.let { productName ->
-                            onCountryProductClick(country, productName, category)
-                        }
-                    }
+                onClick = if (isExample || card.country == null || card.productName == null) null else ({
+                    onCountryProductClick(card.country!!, card.productName!!, category)
                 })
             )
             else -> {

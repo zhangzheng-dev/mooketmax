@@ -384,7 +384,8 @@ interface ApiService {
      */
     @POST("api/v1/auth/send-code")
     suspend fun sendCode(
-        @Body request: SendCodeRequest
+        @Body request: SendCodeRequest,
+        @Header("X-Device-Id") deviceId: String
     ): ApiResponse<Map<String, String>>
 
     /**

@@ -13,6 +13,8 @@ object SessionManager {
     private const val KEY_USER_ID = "user_id"
     private const val KEY_NICKNAME = "nickname"
     private const val KEY_NEEDS_PROFILE = "needs_profile"
+    private const val KEY_MOOKET_ID = "mooket_id"
+    private const val KEY_GATEWAY_TOKEN = "gateway_token"
 
     private lateinit var prefs: SharedPreferences
 
@@ -43,6 +45,33 @@ object SessionManager {
         get() = prefs.getString(KEY_NICKNAME, null)
         set(value) {
             prefs.edit().putString(KEY_NICKNAME, value).apply()
+        }
+
+    /**
+     * 牧集号（用于外部API如 gateway.mujidigital.com 的用户ID）
+     */
+    var mooketId: String?
+        get() = prefs.getString(KEY_MOOKET_ID, null)
+        set(value) {
+            prefs.edit().putString(KEY_MOOKET_ID, value).apply()
+        }
+
+    /**
+     * Gateway 用户ID（来自 /oauth/token 返回的 userId）
+     */
+    var gatewayUserId: String?
+        get() = prefs.getString("gateway_user_id", null)
+        set(value) {
+            prefs.edit().putString("gateway_user_id", value).apply()
+        }
+
+    /**
+     * Gateway Access Token（用于 gateway.mujidigital.com API）
+     */
+    var gatewayToken: String?
+        get() = prefs.getString(KEY_GATEWAY_TOKEN, null)
+        set(value) {
+            prefs.edit().putString(KEY_GATEWAY_TOKEN, value).apply()
         }
 
     /**

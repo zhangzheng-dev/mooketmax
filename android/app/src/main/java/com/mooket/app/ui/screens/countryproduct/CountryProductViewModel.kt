@@ -112,7 +112,12 @@ class CountryProductViewModel : ViewModel() {
                 )
                 if (response.code == 200 && response.data != null) {
                     val currentFactories = _uiState.value.factories.toMutableList()
-                    currentFactories.addAll(response.data.factories)
+                    // 按 country+factoryNo 去重，避免后端返回重复数据导致 key 冲突
+                    val existingKeys = currentFactories.map { "${it.country}_${it.factoryNo}" }.toSet()
+                    val newFactories = response.data.factories.filter {
+                        "${it.country}_${it.factoryNo}" !in existingKeys
+                    }
+                    currentFactories.addAll(newFactories)
                     _uiState.value = _uiState.value.copy(
                         isLoadingMore = false,
                         factories = currentFactories,

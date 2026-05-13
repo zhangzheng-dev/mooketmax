@@ -48,6 +48,7 @@ import com.mooket.app.ui.screens.login.OneClickLoginScreen
 import com.mooket.app.ui.screens.login.RegisterScreen
 import com.mooket.app.ui.screens.profile.ProfileScreen
 import com.mooket.app.ui.screens.profile.EditProfileScreen
+import com.mooket.app.ui.screens.inventory.InventoryScreen
 
 /**
  * 导航路由
@@ -97,6 +98,7 @@ sealed class Screen(val route: String) {
     }
     object Profile : Screen("profile")
     object EditProfile : Screen("profile/edit")
+    object Inventory : Screen("inventory")
 }
 
 @Composable
@@ -244,6 +246,9 @@ fun MooketNavHost(
                         },
                         onProfileClick = {
                             safeNavigate(Screen.Profile.route)
+                        },
+                        onInventoryClick = {
+                            safeNavigate(Screen.Inventory.route)
                         }
                     )
                 }
@@ -285,6 +290,9 @@ fun MooketNavHost(
                 },
                 onProfileClick = {
                     safeNavigate(Screen.Profile.route)
+                },
+                onInventoryClick = {
+                    safeNavigate(Screen.Inventory.route)
                 }
             )
         }
@@ -690,6 +698,15 @@ fun MooketNavHost(
                     // 这样避免在Login流程上叠加，导致点返回键回不到首页
                     safePopBackStack()
                     safeNavigate(Screen.Profile.route)
+                }
+            )
+        }
+
+        // 库存页
+        composable(Screen.Inventory.route) {
+            InventoryScreen(
+                onBackClick = {
+                    safePopBackStack()
                 }
             )
         }

@@ -1,9 +1,13 @@
 package com.mooket.app.ui.screens.login
 
-import android.content.Context
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mooket.app.MainActivity
 import com.mooket.app.data.SessionManager
+import com.mooket.app.data.api.AesEncryptUtil
+import com.mooket.app.data.api.GatewayApiClient
+import com.mooket.app.data.api.GatewayAuthService
 import com.mooket.app.data.api.RetrofitClient
 import com.mooket.app.data.model.*
 import kotlinx.coroutines.delay
@@ -25,6 +29,8 @@ class LoginViewModel : ViewModel() {
     // 缓存
     private var cachedPhone: String = ""
     private var cachedToken: String? = null
+    // Gateway SMS/OAuth 统一 clientId（时间戳）
+    private var cachedClientId: String = ""
 
     /**
      * 设置 token
@@ -46,7 +52,17 @@ class LoginViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                val response = apiService.sendCode(SendCodeRequest(phone))
+                val deviceId = Settings.Secure.getString(
+                    MainActivity.appContext.contentResolver,
+                    Settings.Secure.ANDROID_ID
+                )
+
+                // 生成时间戳作为 clientId（与 RN 保持一致）
+                cachedClientId = System.currentTimeMillis().toString()
+
+                // 调我们后端的 send-code 接口（后端会存储验证码到 smsCodeStore）
+                val response = apiService.sendCode(SendCodeRequest(phone), deviceId)
+
                 if (response.code == 200) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -56,7 +72,6 @@ class LoginViewModel : ViewModel() {
                     )
                     startCountdown()
                 } else {
-                    // 即使发送失败也跳转到验证码页，让用户看到倒计时和重试提示
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         phone = phone,
@@ -99,18 +114,56 @@ class LoginViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                val response = apiService.login(LoginRequest(cachedPhone, code))
+                val deviceId = Settings.Secure.getString(
+                    MainActivity.appContext.contentResolver,
+                    Settings.Secure.ANDROID_ID
+                )
+
+                // 1. 先调我们后端登录（拿 JWT token）
+                val response = apiService.login(LoginRequest(cachedPhone, code, deviceId))
                 if (response.code == 200 && response.data != null) {
                     cachedToken = response.data.token
-                    // 持久化到 SessionManager，供 AuthInterceptor 使用
                     SessionManager.token = response.data.token
                     response.data.userId?.let { SessionManager.userId = it }
+                    // 保存后端返回的 gateway token（优先用后端返回的，比 Android 单独调 gateway 更稳定）
+                    response.data.gatewayAccessToken?.let {
+                        SessionManager.gatewayToken = it
+                        android.util.Log.i("Login", "【后端返回】gatewayToken saved: ${it.take(20)}...")
+                    }
+                    response.data.gatewayUserId?.let {
+                        SessionManager.gatewayUserId = it
+                    }
+                    response.data.mooketId?.let {
+                        SessionManager.mooketId = it
+                    }
                     val nickname = response.data.nickname
                     val needsProfile = nickname.isNullOrBlank()
-                    // 只有需要完善资料时才标记，注册成功后的老用户不需要
                     SessionManager.needsProfile = needsProfile
+
+                    // 2. Android 直接调 gateway OAuth（用相同的 clientId，解决设备绑定问题）
+                    try {
+                        val deviceId = Settings.Secure.getString(
+                            MainActivity.appContext.contentResolver,
+                            Settings.Secure.ANDROID_ID
+                        )
+                        val gatewayResponse = GatewayApiClient.gatewayAuthService.exchangeToken(
+                            mobile = cachedPhone,
+                            smsCode = code,
+                            deviceId = deviceId,  // 必须与 SMS 发送时一致（都用 ANDROID_ID）
+                            deviceMac = deviceId
+                        )
+                        if (gatewayResponse.result?.accessToken != null) {
+                            SessionManager.gatewayToken = gatewayResponse.result.accessToken
+                            System.out.println("【Gateway Direct】token获取成功: ${gatewayResponse.result.accessToken}")
+                        } else {
+                            System.out.println("【Gateway Direct】token为空: code=${gatewayResponse.code}, message=${gatewayResponse.message}")
+                        }
+                    } catch (e: Exception) {
+                        System.out.println("【Gateway Direct】token获取失败: ${e.message}")
+                    e.printStackTrace()
+                    }
+
                     if (needsProfile) {
-                        // 昵称为空=未完善资料，跳转到注册页面
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             screen = LoginScreen.Register,
@@ -118,7 +171,6 @@ class LoginViewModel : ViewModel() {
                             isNewUser = true
                         )
                     } else {
-                        // 资料完整，跳转首页
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             screen = LoginScreen.Home,
@@ -171,6 +223,8 @@ class LoginViewModel : ViewModel() {
                         nickname = nickname,
                         identityTags = identityTags
                     )
+                    // 获取 mooketId 保存到 SessionManager（用于外部API）
+                    fetchAndSaveMooketId()
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -206,6 +260,26 @@ class LoginViewModel : ViewModel() {
      */
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    /**
+     * 获取 mooketId 并保存到 SessionManager
+     * mooketId 是外部 API（gateway.mujidigital.com）的用户标识
+     */
+    private fun fetchAndSaveMooketId() {
+        viewModelScope.launch {
+            try {
+                val profileResponse = apiService.getUserProfile()
+                if (profileResponse.code == 200 && profileResponse.data != null) {
+                    val mooketNo = profileResponse.data.mooketNo
+                    if (!mooketNo.isNullOrBlank()) {
+                        SessionManager.mooketId = mooketNo
+                    }
+                }
+            } catch (e: Exception) {
+                // 获取 mooketId 失败不影响登录流程，静默处理
+            }
+        }
     }
 
     /**
