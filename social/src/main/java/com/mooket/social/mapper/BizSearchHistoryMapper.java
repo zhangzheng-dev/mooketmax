@@ -25,6 +25,24 @@ public interface BizSearchHistoryMapper extends BaseMapper<BizSearchHistory> {
     @Update({"UPDATE biz_search_history SET create_time = CURRENT_TIMESTAMP WHERE history_id = #{historyId}"})
     void updateCreateTime(@Param("historyId") Long historyId);
 
+    @Update({"UPDATE biz_search_history SET create_time = CURRENT_TIMESTAMP, ",
+            "is_self_select = #{isSelfSelect}, ",
+            "product_id = COALESCE(#{productId}, product_id), ",
+            "product_name = COALESCE(#{productName}, product_name), ",
+            "country = COALESCE(#{country}, country), ",
+            "factory_no = COALESCE(#{factoryNo}, factory_no), ",
+            "brand_id = COALESCE(#{brandId}, brand_id), ",
+            "merchant_id = COALESCE(#{merchantId}, merchant_id) ",
+            "WHERE history_id = #{historyId}"})
+    void updateCreateTimeAndDetails(@Param("historyId") Long historyId,
+                                    @Param("isSelfSelect") Integer isSelfSelect,
+                                    @Param("productId") Long productId,
+                                    @Param("productName") String productName,
+                                    @Param("country") String country,
+                                    @Param("factoryNo") String factoryNo,
+                                    @Param("brandId") Long brandId,
+                                    @Param("merchantId") Long merchantId);
+
     @Delete({"DELETE FROM biz_search_history WHERE history_id = #{historyId}"})
     void deleteById(@Param("historyId") Long historyId);
 
@@ -37,6 +55,9 @@ public interface BizSearchHistoryMapper extends BaseMapper<BizSearchHistory> {
     @Insert({"INSERT INTO biz_search_history (user_id, search_word, search_type, is_self_select, create_time) VALUES (#{userId}, #{searchWord}, #{searchType}, #{isSelfSelect}, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"})
     void insertOrIgnore(@Param("userId") Long userId, @Param("searchWord") String searchWord, @Param("searchType") String searchType, @Param("isSelfSelect") Integer isSelfSelect);
 
-    @Insert({"INSERT INTO biz_search_history (user_id, search_word, search_type, is_self_select, create_time) VALUES (#{userId}, #{searchWord}, #{searchType}, #{isSelfSelect}, CURRENT_TIMESTAMP)"})
+    @Insert({"INSERT INTO biz_search_history ",
+            "(user_id, search_word, search_type, is_self_select, create_time, product_id, product_name, country, factory_no, brand_id, merchant_id) ",
+            "VALUES (#{userId}, #{searchWord}, #{searchType}, #{isSelfSelect}, CURRENT_TIMESTAMP, ",
+            "#{productId}, #{productName}, #{country}, #{factoryNo}, #{brandId}, #{merchantId})"})
     void insertOrUpdateFull(@Param("userId") Long userId, @Param("searchWord") String searchWord, @Param("searchType") String searchType, @Param("isSelfSelect") Integer isSelfSelect, @Param("productId") Long productId, @Param("productName") String productName, @Param("country") String country, @Param("factoryNo") String factoryNo, @Param("brandId") Long brandId, @Param("merchantId") Long merchantId);
 }

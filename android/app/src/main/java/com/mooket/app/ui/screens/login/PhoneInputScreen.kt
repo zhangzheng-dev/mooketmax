@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -39,6 +40,7 @@ fun PhoneInputScreen(
 ) {
     var phone by remember { mutableStateOf("") }
     var agreementChecked by remember { mutableStateOf(true) }
+    val focusManager = LocalFocusManager.current
 
     Box(
         modifier = Modifier
@@ -185,7 +187,10 @@ fun PhoneInputScreen(
 
             // 登录按钮
             Button(
-                onClick = { onSendCode(phone) },
+                onClick = {
+                    focusManager.clearFocus()
+                    onSendCode(phone)
+                },
                 enabled = phone.length == 11 && agreementChecked && !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()

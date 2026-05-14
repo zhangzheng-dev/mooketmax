@@ -26,6 +26,26 @@ data class InventoryUiState(
     val deliveryDates: Map<String, String> = emptyMap(),
     // 透视表汇总
     val pivotSummaries: List<PivotSummary> = emptyList(),
+    val analytics: InventoryAnalyticsResult = InventoryAnalyticsResult(
+        products = emptyList(),
+        summary = InventoryPivotSummary(),
+        detailRows = emptyList()
+    ),
+    val dynamicSummary: DynamicInventorySummary = DynamicInventorySummary(
+        groupCount = 0,
+        containerCount = 0,
+        totalWeight = 0.0,
+        averageCost = 0.0,
+        totalProfit = 0.0,
+        totalOccupiedCash = 0.0
+    ),
+    val dynamicGroupCards: List<DynamicInventoryGroupCard> = emptyList(),
+    val pivotSearchQuery: String = "",
+    val detailSearchQuery: String = "",
+    val showKg: Boolean = false,
+    val dynamicGroupBys: Set<DynamicGroupBy> = setOf(DynamicGroupBy.PRODUCT),
+    val detailSortKey: DetailSortKey = DetailSortKey.PRODUCTION_DATE,
+    val detailSortDirection: SortDirection = SortDirection.DESC,
     // 当前Tab
     val currentTab: InventoryTab = InventoryTab.PIVOT_STANDARD,
     // 动态库存卡片数据
@@ -104,6 +124,9 @@ class InventoryViewModel(
 
             val result = repository.fetchInventoryDataset()
             result.onSuccess { dataset ->
+                val analytics = InventoryAnalytics.analyze(dataset, _uiState.value.pivotSearchQuery)
+                val dynamicSummary = InventoryAnalytics.buildDynamicSummary(analytics.detailRows, _uiState.value.dynamicGroupBys)
+                val dynamicGroupCards = InventoryAnalytics.buildDynamicCards(analytics.detailRows, _uiState.value.dynamicGroupBys)
                 val pivotSummaries = calculatePivotSummaries(dataset.items)
                 val dynamicCards = calculateDynamicInventoryCards(dataset.items)
 
@@ -115,6 +138,9 @@ class InventoryViewModel(
                         marketPrices = dataset.marketPrices,
                         priceConfig = dataset.priceConfig,
                         deliveryDates = dataset.deliveryDates,
+                        analytics = analytics,
+                        dynamicSummary = dynamicSummary,
+                        dynamicGroupCards = dynamicGroupCards,
                         pivotSummaries = pivotSummaries,
                         dynamicInventoryCards = dynamicCards
                     )
@@ -184,6 +210,69 @@ class InventoryViewModel(
      */
     fun selectTab(tab: InventoryTab) {
         _uiState.update { it.copy(currentTab = tab) }
+    }
+
+    fun setPivotSearchQuery(query: String) {
+        val dataset = currentDataset()
+        if (dataset == null) {
+            _uiState.update { it.copy(pivotSearchQuery = query) }
+            return
+        }
+        val analytics = InventoryAnalytics.analyze(dataset, query)
+        _uiState.update {
+            it.copy(
+                pivotSearchQuery = query,
+                analytics = analytics,
+                dynamicSummary = InventoryAnalytics.buildDynamicSummary(analytics.detailRows, it.dynamicGroupBys),
+                dynamicGroupCards = InventoryAnalytics.buildDynamicCards(analytics.detailRows, it.dynamicGroupBys)
+            )
+        }
+    }
+
+    fun setDetailSearchQuery(query: String) {
+        _uiState.update { it.copy(detailSearchQuery = query) }
+    }
+
+    fun toggleShowKg() {
+        _uiState.update { it.copy(showKg = !it.showKg) }
+    }
+
+    fun toggleDynamicGroupBy(groupBy: DynamicGroupBy) {
+        _uiState.update { state ->
+            val next = if (state.dynamicGroupBys.contains(groupBy)) {
+                if (state.dynamicGroupBys.size == 1) state.dynamicGroupBys else state.dynamicGroupBys - groupBy
+            } else {
+                state.dynamicGroupBys + groupBy
+            }
+            state.copy(
+                dynamicGroupBys = next,
+                dynamicSummary = InventoryAnalytics.buildDynamicSummary(state.analytics.detailRows, next),
+                dynamicGroupCards = InventoryAnalytics.buildDynamicCards(state.analytics.detailRows, next)
+            )
+        }
+    }
+
+    fun selectDetailSort(key: DetailSortKey) {
+        _uiState.update { state ->
+            val direction = if (state.detailSortKey == key) {
+                if (state.detailSortDirection == SortDirection.DESC) SortDirection.ASC else SortDirection.DESC
+            } else {
+                SortDirection.DESC
+            }
+            state.copy(detailSortKey = key, detailSortDirection = direction)
+        }
+    }
+
+    private fun currentDataset(): InventoryDataset? {
+        val state = _uiState.value
+        if (state.items.isEmpty()) return null
+        return InventoryDataset(
+            items = state.items,
+            paramSets = state.paramSets,
+            marketPrices = state.marketPrices,
+            priceConfig = state.priceConfig,
+            deliveryDates = state.deliveryDates
+        )
     }
 
     /**

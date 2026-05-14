@@ -230,7 +230,8 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
             }
             case "merchant": {
                 MerchantCardDTO m = (MerchantCardDTO) card;
-                return m.getTodayOfferCount() != null && m.getTodayOfferCount() > 0;
+                if (m.getTodayOfferCount() != null && m.getTodayOfferCount() > 0) return true;
+                return m.getLatestOffers() != null && !m.getLatestOffers().isEmpty();
             }
             default:
                 return true; // 其他类型默认通过
@@ -498,7 +499,6 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         } else {
             card.setMerchantName("商家-" + merchantId);
         }
-        card.setTodayOfferCount(stat != null ? stat.getTodayOfferCount() : null);
 
         // 最新报盘
         List<BizOffer> latestOffers = bizOfferMapper.findLatestByMerchant(merchantId, 2, category);
@@ -518,6 +518,17 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         if (latestOfferDTOs.isEmpty()) {
             return null;
         }
+        Integer offerCount = stat != null ? stat.getTodayOfferCount() : null;
+        if (offerCount == null || offerCount <= 0) {
+            BizOfferMapper.MerchantDashboardStats dashboardStats =
+                    bizOfferMapper.selectMerchantDashboardStats(merchantId, category);
+            if (dashboardStats != null && dashboardStats.recentOfferCount != null) {
+                offerCount = dashboardStats.recentOfferCount.intValue();
+            } else {
+                offerCount = latestOfferDTOs.size();
+            }
+        }
+        card.setTodayOfferCount(offerCount);
         return card;
     }
 

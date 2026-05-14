@@ -665,7 +665,7 @@ private fun RealNameRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = realNameStatus != "approved") { onRealNameVerifyClick() }
+            .clickable(enabled = realNameStatus != "verified") { onRealNameVerifyClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -680,7 +680,7 @@ private fun RealNameRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             when (realNameStatus) {
-                "approved" -> {
+                "verified" -> {
                     Text(
                         text = realName ?: "",
                         fontSize = 14.sp,

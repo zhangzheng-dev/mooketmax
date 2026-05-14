@@ -27,6 +27,8 @@ public class UacUser {
 
     private String anonymousName;
 
+    private String faceUrl;
+
     private String anonymousFaceUrl;
 
     private Integer isIdentification;

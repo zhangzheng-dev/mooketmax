@@ -491,7 +491,7 @@ private fun UserInfoCard(
                         color = TextPrimary
                     )
                     // Real name badge
-                    if (realNameStatus == "approved" && !realName.isNullOrEmpty()) {
+                    if (realNameStatus == "verified" && !realName.isNullOrEmpty()) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
@@ -499,9 +499,22 @@ private fun UserInfoCard(
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "已实名",
+                                text = "已认证",
                                 fontSize = 10.sp,
                                 color = Surface
+                            )
+                        }
+                    } else if (realNameStatus == "pending") {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFCCCCCC), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "未认证",
+                                fontSize = 10.sp,
+                                color = Color.White
                             )
                         }
                     }

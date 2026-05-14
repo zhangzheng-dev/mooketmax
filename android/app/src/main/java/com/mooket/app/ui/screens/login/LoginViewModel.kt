@@ -72,14 +72,12 @@ class LoginViewModel : ViewModel() {
                     )
                     startCountdown()
                 } else {
+                    // 失败（如账号被禁用），停留在登录页
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         phone = phone,
-                        screen = LoginScreen.SmsVerify,
-                        countdown = 60,
                         error = response.message ?: "发送失败"
                     )
-                    startCountdown()
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(

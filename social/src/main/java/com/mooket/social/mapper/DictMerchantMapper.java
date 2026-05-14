@@ -23,6 +23,6 @@ public interface DictMerchantMapper extends BaseMapper<DictMerchant> {
     @Select({"<script>SELECT * FROM dict_merchant WHERE contact_phone IN <foreach collection='phones' item='phone' open='(' separator=',' close=')'>#{phone}</foreach></script>"})
     List<DictMerchant> selectByPhones(@Param("phones") List<String> phones);
 
-    @Select({"SELECT * FROM dict_merchant WHERE REPLACE(merchant_name, ' ', '') = REPLACE(#{merchantName}, ' ', '') LIMIT 1"})
+    @Select({"SELECT * FROM dict_merchant WHERE REPLACE(merchant_name, ' ', '') = REPLACE(#{merchantName}, ' ', '') OR REPLACE(merchant_short_name, ' ', '') = REPLACE(#{merchantName}, ' ', '') LIMIT 1"})
     Optional<DictMerchant> findByName(@Param("merchantName") String merchantName);
 }

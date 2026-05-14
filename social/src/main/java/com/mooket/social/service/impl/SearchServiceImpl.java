@@ -1052,7 +1052,8 @@ public class SearchServiceImpl implements SearchService {
             Long existingId = searchHistoryMapper.findExistingHistory(userId, searchWord, searchType);
             if (existingId != null) {
                 // 记录已存在，更新时间和详情
-                searchHistoryMapper.updateCreateTime(existingId);
+                searchHistoryMapper.updateCreateTimeAndDetails(existingId, isSelfSelect,
+                        productId, productName, country, factoryNo, brandId, merchantId);
                 log.info("[搜索历史] 更新记录: historyId={}, userId={}, searchWord={}, type={}",
                         existingId, userId, searchWord, searchType);
             } else {

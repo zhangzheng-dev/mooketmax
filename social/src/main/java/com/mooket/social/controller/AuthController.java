@@ -283,8 +283,10 @@ public class AuthController {
             user.setMooketNo(uacUser.getUserMujiNo());
             user.setMooketId(String.valueOf(uacUser.getId()));
             user.setNickname(uacUser.getNickName());
-            // 头像URL
-            user.setAvatarUrl(uacUser.getAnonymousFaceUrl());
+            user.setRealName(uacUser.getUserName());
+            // 头像URL：优先取 face_url，没有则取 anonymous_face_url
+            String faceUrl = uacUser.getFaceUrl();
+            user.setAvatarUrl(faceUrl != null && !faceUrl.isBlank() ? faceUrl : uacUser.getAnonymousFaceUrl());
             // 实名状态：0=未实名(pending), 1=已实名(verified)
             if (uacUser.getIsIdentification() != null) {
                 user.setRealNameStatus(uacUser.getIsIdentification() == 1 ? "verified" : "pending");
