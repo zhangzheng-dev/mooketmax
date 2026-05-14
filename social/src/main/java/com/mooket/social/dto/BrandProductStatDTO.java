@@ -12,6 +12,7 @@ public class BrandProductStatDTO {
     private String brandName;
     private Integer productId;
     private String productName;
+    private String category;
     private Integer todayOfferCount;
     private Integer todayFactoryCount;
     private BigDecimal priceMin;

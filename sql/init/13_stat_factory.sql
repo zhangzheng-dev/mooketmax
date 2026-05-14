@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS stat_factory (
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 主键：日期+厂号ID
-ALTER TABLE stat_factory ADD CONSTRAINT pk_stat_factory PRIMARY KEY (stat_date, factory_id);
+-- 主键：日期+厂号ID+分类
+ALTER TABLE stat_factory ADD CONSTRAINT pk_stat_factory PRIMARY KEY (stat_date, factory_id, category);
 
 -- 索引
 CREATE INDEX idx_stat_factory_date ON stat_factory(stat_date);

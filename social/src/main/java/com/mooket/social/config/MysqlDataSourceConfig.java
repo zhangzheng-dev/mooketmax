@@ -5,10 +5,10 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 import javax.sql.DataSource;
 
@@ -21,11 +21,14 @@ import javax.sql.DataSource;
 public class MysqlDataSourceConfig {
 
     @Bean(name = "mysqlDataSource")
-    public DataSource mysqlDataSource() {
+    public DataSource mysqlDataSource(
+            @Value("${mooket.datasource.mysql.jdbc-url}") String jdbcUrl,
+            @Value("${mooket.datasource.mysql.username}") String username,
+            @Value("${mooket.datasource.mysql.password}") String password) {
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://43.136.78.41:32106/mallee_muji_social?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai");
-        config.setUsername("read");
-        config.setPassword("MF#20&25Er6");
+        config.setJdbcUrl(jdbcUrl);
+        config.setUsername(username);
+        config.setPassword(password);
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(2);

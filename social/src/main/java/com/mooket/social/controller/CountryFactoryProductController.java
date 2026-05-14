@@ -5,6 +5,8 @@ import com.mooket.social.dto.CountryFactoryProductDetailDTO;
 import com.mooket.social.service.CountryFactoryProductService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 国家+厂号+产品 Controller
  */
@@ -44,6 +46,16 @@ public class CountryFactoryProductController {
             CountryFactoryProductDetailDTO result = countryFactoryProductService.getCountryFactoryProductDetail(
                     country, factoryNo, productName, type, category, sortBy, page, pageSize);
             return ApiResponse.success(result);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/offer/{offerId}/original-text")
+    public ApiResponse<Map<String, Object>> getOfferOriginalText(@PathVariable("offerId") Long offerId) {
+        try {
+            String text = countryFactoryProductService.getOfferOriginalText(offerId);
+            return ApiResponse.success(Map.of("offerId", offerId, "text", text));
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
         }

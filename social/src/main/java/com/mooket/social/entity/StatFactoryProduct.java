@@ -50,6 +50,11 @@ public class StatFactoryProduct {
     private String productName;
 
     /**
+     * 分类（牛/猪）
+     */
+    private String category;
+
+    /**
      * 今日报盘数
      */
     private Integer todayOfferCount;

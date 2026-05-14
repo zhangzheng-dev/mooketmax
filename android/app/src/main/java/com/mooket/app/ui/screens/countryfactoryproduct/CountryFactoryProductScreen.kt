@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
@@ -345,9 +346,15 @@ fun CountryFactoryProductScreen(
                                 onClick = { },
                                 onCopyPhone = onCopyPhone,
                                 onCallClick = onCallClick,
-                                onViewOriginalText = { text ->
-                                    originalText = text
+                                onViewOriginalText = { offer ->
+                                    originalText = "加载中..."
                                     showBottomSheet = true
+                                    viewModel.loadOriginalText(
+                                        offerId = offer.offerId,
+                                        fallback = offer.offerOriginalText ?: offer.offerType
+                                    ) { text ->
+                                        originalText = text
+                                    }
                                 }
                             )
                         }
@@ -422,13 +429,19 @@ fun CountryFactoryProductScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 原文内容
-                Text(
-                    text = if (originalText.isBlank()) "抱歉，暂无原文！" else originalText,
-                    fontSize = 14.sp,
-                    lineHeight = 22.sp,
-                    color = if (originalText.isBlank()) Color(0xFF9DA4A3) else Color(0xFF3C4947)
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = if (originalText.isBlank()) "抱歉，暂无原文！" else originalText,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = if (originalText.isBlank()) Color(0xFF9DA4A3) else Color(0xFF3C4947)
+                    )
+                }
             }
         }
     }
@@ -1741,7 +1754,7 @@ private fun MerchantOfferItem(
     onClick: () -> Unit,
     onCopyPhone: (String) -> Unit = {},
     onCallClick: (String) -> Unit = {},
-    onViewOriginalText: (String) -> Unit = {}
+    onViewOriginalText: (EmployeeOfferItem) -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -2001,7 +2014,7 @@ private fun MerchantOfferItem(
 private fun EmployeeOfferCard(
     employeeOffer: EmployeeOfferItem,
     merchantPhone: String?,
-    onViewOriginalText: (String) -> Unit = {},
+    onViewOriginalText: (EmployeeOfferItem) -> Unit = {},
     onCopyPhone: () -> Unit = {},
     onCallClick: () -> Unit = {}
 ) {
@@ -2197,7 +2210,7 @@ private fun EmployeeOfferCard(
                         icon = Icons.Default.Description,
                         text = "查看原文",
                         textColor = Color(0xFF3C4947),
-                        onClick = { onViewOriginalText(employeeOffer.offerOriginalText ?: employeeOffer.offerType ?: "") },
+                        onClick = { onViewOriginalText(employeeOffer) },
                         iconPainter = painterResource(id = R.drawable.ic_book)
                     )
 

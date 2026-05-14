@@ -53,6 +53,15 @@ private final BizOfferMapper offerMapper;
         return buildCountryFactoryProductDetail(country, factoryNo, productName, type, category, sortBy, page, pageSize);
     }
 
+    @Override
+    public String getOfferOriginalText(Long offerId) {
+        if (offerId == null) {
+            return "";
+        }
+        String text = offerMapper.selectOfferOriginalText(offerId);
+        return text != null ? text : "";
+    }
+
     /**
      * 构建国家+厂号+产品详情
      */
@@ -181,6 +190,14 @@ private final BizOfferMapper offerMapper;
     private List<MerchantOfferGroup> groupOffersByMerchant(List<BizOffer> offers) {
         // 使用 Map 来分组：key = merchantId 或 "NO_MERCHANT"
         Map<String, List<BizOffer>> groupedByKey = new LinkedHashMap<>();
+        Set<Long> merchantIds = offers.stream()
+                .map(BizOffer::getMerchantId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, DictMerchant> merchantMap = merchantIds.isEmpty()
+                ? Collections.emptyMap()
+                : merchantMapper.selectBatchIds(merchantIds).stream()
+                    .collect(Collectors.toMap(DictMerchant::getMerchantId, m -> m, (left, right) -> left));
 
         for (BizOffer offer : offers) {
             String groupKey;
@@ -211,7 +228,7 @@ private final BizOfferMapper offerMapper;
                 group.setMerchantPhone(firstOffer.getContactPhone());
 
                 // 通过 merchantId 查询商家名称
-                DictMerchant merchant = merchantMapper.selectById(merchantId);
+                DictMerchant merchant = merchantMap.get(merchantId);
                 if (merchant != null) {
                     group.setMerchantName(merchant.getMerchantName());
                     // 检查是否为知名商家（通过 merchantTags 判断）
@@ -259,7 +276,7 @@ private final BizOfferMapper offerMapper;
         dto.setGoodsType(offer.getGoodsType());
         dto.setTags(offer.getTags());
         dto.setOfferType(offer.getOfferType());
-        dto.setOfferOriginalText(offer.getOfferOriginalText());
+        dto.setOfferOriginalText(null);
 
         // 发布时间格式化（返回完整日期时间，前端判断今天/昨天）
         if (offer.getPublishTime() != null) {

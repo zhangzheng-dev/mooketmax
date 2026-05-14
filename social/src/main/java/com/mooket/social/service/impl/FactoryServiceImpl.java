@@ -54,11 +54,16 @@ public class FactoryServiceImpl implements FactoryService {
         dto.setRecentOfferCount(dashboardStats.recentOfferCount != null ? dashboardStats.recentOfferCount : 0);
 
         // 3. 获取产品全量数据（用于排序）
-        List<BizOfferMapper.FactoryProductAgg> aggList = offerMapper.selectFactoryProductAgg(
-                country, factoryNo, category, dbOfferType, 1000, 0);
+        int offset = (page - 1) * pageSize;
+        boolean fastPath = "comprehensive".equalsIgnoreCase(sortBy);
+        List<BizOfferMapper.FactoryProductAgg> aggList = fastPath
+                ? offerMapper.selectFactoryProductAggFast(country, factoryNo, category, dbOfferType, pageSize, offset)
+                : offerMapper.selectFactoryProductAgg(country, factoryNo, category, dbOfferType, 1000, 0);
 
         // 4. 获取总数
-        int totalCount = offerMapper.countFactoryProductAgg(country, factoryNo, category, dbOfferType);
+        int totalCount = fastPath
+                ? offerMapper.countFactoryProductAggFast(country, factoryNo, category, dbOfferType)
+                : offerMapper.countFactoryProductAgg(country, factoryNo, category, dbOfferType);
         int totalPages = (int) Math.ceil((double) totalCount / pageSize);
 
         // 5. 排序（全量排序后再分页，保证跨页一致性）
@@ -78,9 +83,13 @@ public class FactoryServiceImpl implements FactoryService {
         // else: 默认按报盘数降序已在SQL中处理
 
         // 6. 分页
-        int offset = (page - 1) * pageSize;
-        int endIndex = Math.min(offset + pageSize, aggList.size());
-        List<BizOfferMapper.FactoryProductAgg> pagedAgg = offset < aggList.size() ? aggList.subList(offset, endIndex) : Collections.emptyList();
+        List<BizOfferMapper.FactoryProductAgg> pagedAgg;
+        if (fastPath) {
+            pagedAgg = aggList;
+        } else {
+            int endIndex = Math.min(offset + pageSize, aggList.size());
+            pagedAgg = offset < aggList.size() ? aggList.subList(offset, endIndex) : Collections.emptyList();
+        }
 
         // 7. 转换聚合数据为DTO
         List<FactoryDetailDTO.FactoryProductDTO> products = pagedAgg.stream()

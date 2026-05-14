@@ -262,28 +262,36 @@ public class DataSyncService {
     private Map<String, Long> batchGetFactoryIds(List<SocialOnlineBusiness> sourceData) {
         Map<String, Long> result = new HashMap<>();
 
-        // 收集所有不重复的factory_no
-        List<String> factoryNos = sourceData.stream()
-                .map(SocialOnlineBusiness::getPlantNo)
-                .filter(Objects::nonNull)
-                .filter(p -> !p.isEmpty())
-                .distinct()
+        // 收集所有不重复的 factoryNo + category 组合
+        List<SocialOnlineBusiness> validData = sourceData.stream()
+                .filter(s -> s.getPlantNo() != null && !s.getPlantNo().isEmpty())
                 .collect(Collectors.toList());
 
-        if (factoryNos.isEmpty()) {
+        if (validData.isEmpty()) {
             return result;
         }
 
-        // 直接用factory_no查询dict_factory表
-        for (String factoryNo : factoryNos) {
-            try {
-                // 使用精确匹配（忽略空格）
-                List<DictFactory> factories = factoryMapper.selectByFactoryNo(factoryNo);
-                if (factories != null && !factories.isEmpty()) {
-                    result.put(factoryNo, factories.get(0).getFactoryId().longValue());
+        // 按 category 分组处理，每组独立查询
+        Map<String, List<SocialOnlineBusiness>> byCategory = validData.stream()
+                .collect(Collectors.groupingBy(s -> convertCategory(s.getGoodsCategory())));
+
+        for (Map.Entry<String, List<SocialOnlineBusiness>> entry : byCategory.entrySet()) {
+            String category = entry.getKey();
+            List<String> factoryNos = entry.getValue().stream()
+                    .map(SocialOnlineBusiness::getPlantNo)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            for (String factoryNo : factoryNos) {
+                try {
+                    List<DictFactory> factories = factoryMapper.selectByFactoryNoWithCategory(factoryNo, category);
+                    if (factories != null && !factories.isEmpty()) {
+                        // 使用 factoryNo + category 组合作为 key，避免跨 category 数据覆盖
+                        result.put(factoryNo + "|" + category, factories.get(0).getFactoryId().longValue());
+                    }
+                } catch (Exception e) {
+                    // ignore
                 }
-            } catch (Exception e) {
-                // ignore
             }
         }
 
@@ -330,12 +338,14 @@ public class DataSyncService {
         Map<Long, Integer> result = new HashMap<>();
 
         // 收集所有不重复的factory_id（用于兼容原有调用方）
+        // ⚠️ 必须按 category 过滤，否则同一 factory_no 在牛/猪类下对应不同 factory_id，会导致 brand_id 串类
         List<Long> factoryIds = sourceData.stream()
                 .map(src -> {
                     String factoryNo = src.getPlantNo();
-                    if (factoryNo == null || factoryNo.isEmpty()) return null;
-                    // 通过factory_no查找factory_id
-                    var factories = factoryMapper.selectByFactoryNo(factoryNo);
+                    String category = convertCategory(src.getGoodsCategory());
+                    if (factoryNo == null || factoryNo.isEmpty() || category == null) return null;
+                    // 通过factory_no + category 查找factory_id，避免跨类混淆
+                    var factories = factoryMapper.selectByFactoryNoWithCategory(factoryNo, category);
                     if (factories != null && !factories.isEmpty()) {
                         return factories.get(0).getFactoryId().longValue();
                     }
@@ -390,7 +400,7 @@ public class DataSyncService {
             if (factoryNo == null || factoryNo.isEmpty() || category == null) continue;
             Integer brandId = factoryNoBrandMap.get(factoryNo + "_" + category);
             if (brandId != null) {
-                var factories = factoryMapper.selectByFactoryNo(factoryNo);
+                var factories = factoryMapper.selectByFactoryNoWithCategory(factoryNo, category);
                 if (factories != null && !factories.isEmpty()) {
                     Long factoryId = factories.get(0).getFactoryId().longValue();
                     result.putIfAbsent(factoryId, brandId);
@@ -462,13 +472,14 @@ public class DataSyncService {
         // factory_no
         target.setFactoryNo(src.getPlantNo());
 
-        // factory_id: 通过 factory_no 直接查询 dict_factory 表
-        if (src.getPlantNo() != null && !src.getPlantNo().isEmpty()) {
-            target.setFactoryId(factoryIdMap.get(src.getPlantNo()));
+        // factory_id: 通过 factory_no + category 组合查询 dict_factory 表获取
+        String category = target.getCategory();
+        if (src.getPlantNo() != null && !src.getPlantNo().isEmpty() && category != null) {
+            target.setFactoryId(factoryIdMap.get(src.getPlantNo() + "|" + category));
         }
 
         // brand_id: 通过 factory_id 查询 dict_brand 表获取
-        Long factoryId = factoryIdMap.get(src.getPlantNo());
+        Long factoryId = target.getFactoryId();
         if (factoryId != null) {
             target.setBrandId(brandIdMap.get(factoryId));
         }

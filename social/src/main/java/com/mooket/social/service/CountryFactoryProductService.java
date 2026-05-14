@@ -28,4 +28,6 @@ public interface CountryFactoryProductService {
             int page,
             int pageSize
     );
+
+    String getOfferOriginalText(Long offerId);
 }

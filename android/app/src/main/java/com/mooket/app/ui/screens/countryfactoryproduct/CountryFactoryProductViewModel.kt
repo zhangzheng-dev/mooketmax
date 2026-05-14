@@ -107,6 +107,22 @@ class CountryFactoryProductViewModel : ViewModel() {
      */
     fun getCachedProductId(): Int? = cachedProductId
 
+    fun loadOriginalText(offerId: Long?, fallback: String?, onLoaded: (String) -> Unit) {
+        if (offerId == null) {
+            onLoaded(fallback.orEmpty())
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val response = apiService.getOfferOriginalText(offerId)
+                onLoaded(response.data?.text ?: fallback.orEmpty())
+            } catch (e: Exception) {
+                onLoaded(fallback.orEmpty())
+            }
+        }
+    }
+
     /**
      * 切换报盘/求购
      */

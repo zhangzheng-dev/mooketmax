@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public class BrandStatDTO {
     private Integer brandId;
     private String brandName;
+    private String category;
     private Integer todayOfferCount;
     private Integer todayFactoryCount;
     private Integer todayProductCount;

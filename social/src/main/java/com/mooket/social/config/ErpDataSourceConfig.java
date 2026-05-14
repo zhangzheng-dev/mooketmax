@@ -5,6 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,11 +21,14 @@ import javax.sql.DataSource;
 public class ErpDataSourceConfig {
 
     @Bean(name = "erpDataSource")
-    public DataSource erpDataSource() {
+    public DataSource erpDataSource(
+            @Value("${mooket.datasource.erp.jdbc-url}") String jdbcUrl,
+            @Value("${mooket.datasource.erp.username}") String username,
+            @Value("${mooket.datasource.erp.password}") String password) {
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://gz-cdb-f02b35kd.sql.tencentcdb.com:28912/mallee_muji_erp?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai");
-        config.setUsername("root");
-        config.setPassword("kI@JT9nM");
+        config.setJdbcUrl(jdbcUrl);
+        config.setUsername(username);
+        config.setPassword(password);
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
         config.setMaximumPoolSize(5);
         config.setMinimumIdle(2);

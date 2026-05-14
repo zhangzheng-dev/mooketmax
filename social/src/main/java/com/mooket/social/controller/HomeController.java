@@ -83,6 +83,22 @@ public class HomeController {
     /**
      * 手动触发首页统计计算（用于测试或数据修复）
      */
+    @PostMapping("/test-cards")
+    public ApiResponse<HomeCardsResponseDTO> testCards(
+            @RequestParam(required = false, defaultValue = "牛") String category,
+            @RequestParam(required = false, defaultValue = "0") Integer tab,
+            @RequestParam(required = false) Long userId) {
+        if (userId == null || tab == 0) {
+            HomeCardsResponseDTO cards = homeStatService.getHomeCards(category);
+            return ApiResponse.success(cards);
+        }
+        HomeCardsResponseDTO cards = searchHistoryService.getRecentSearchCards(userId, category);
+        return ApiResponse.success(cards);
+    }
+
+    /**
+     * 手动触发首页统计计算（用于测试或数据修复）
+     */
     @PostMapping("/compute-stats")
     public ApiResponse<Map<String, String>> computeStats() {
         try {

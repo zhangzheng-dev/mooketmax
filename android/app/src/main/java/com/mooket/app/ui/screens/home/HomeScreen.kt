@@ -420,6 +420,7 @@ Row(verticalAlignment = Alignment.CenterVertically) {
                                 items(selfSelectCards) { card ->
                                     HomeCardItemView(
                                         card = card,
+                                        category = uiState.selectedCategory,
                                         onProductClick = onProductClick,
                                         onCountryClick = onCountryClick,
                                         onBrandClick = onBrandClick,
@@ -562,6 +563,7 @@ Row(verticalAlignment = Alignment.CenterVertically) {
                                 items(exampleCards) { card ->
                                     HomeCardItemView(
                                         card = card,
+                                        category = uiState.selectedCategory,
                                         onProductClick = onProductClick,
                                         onCountryClick = onCountryClick,
                                         onBrandClick = onBrandClick,
@@ -580,6 +582,7 @@ Row(verticalAlignment = Alignment.CenterVertically) {
                                 items(historyCards) { card ->
                                     HomeCardItemView(
                                         card = card,
+                                        category = uiState.selectedCategory,
                                         onProductClick = onProductClick,
                                         onCountryClick = onCountryClick,
                                         onBrandClick = onBrandClick,
@@ -749,6 +752,7 @@ private fun HomeCardsContent(
                 items(uiState.recentSearchCards, key = { "${it.cardType}_${it.rank}_${it.historyId}" }) { card ->
                     HomeCardItemView(
                         card = card,
+                        category = uiState.selectedCategory,
                         onProductClick = onProductClick,
                         onCountryClick = onCountryClick,
                         onBrandClick = onBrandClick,
@@ -768,6 +772,7 @@ private fun HomeCardsContent(
 @Composable
 private fun HomeCardItemView(
     card: com.mooket.app.data.model.HomeCardItem,
+    category: String,
     onProductClick: (Int, String, String) -> Unit,
     onCountryClick: (String, String) -> Unit,
     onBrandClick: (String, String) -> Unit,
@@ -781,8 +786,6 @@ private fun HomeCardItemView(
     onAddToSelfSelect: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null
 ) {
-    val category = "牛"
-
     Box {
         when (card.cardType) {
             "product" -> com.mooket.app.ui.screens.home.cards.ProductCard(

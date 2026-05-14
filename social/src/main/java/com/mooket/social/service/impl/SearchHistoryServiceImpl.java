@@ -9,6 +9,8 @@ import com.mooket.social.service.BrandService;
 import com.mooket.social.service.SearchHistoryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,6 +83,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
     private BrandService brandService;
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void addSearchHistory(Long userId, String searchWord, String searchType) {
         Long existingId = searchHistoryMapper.findExistingHistory(userId, searchWord, searchType);
@@ -104,12 +107,14 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
     }
 
     @Override
+    @Cacheable(value = "recentSearchCards", key = "#userId + '_' + #category")
     public HomeCardsResponseDTO getRecentSearchCards(Long userId, String category) {
         List<BizSearchHistory> histories = searchHistoryMapper.findRecentSearches(userId, 50);
         return buildCardsFromHistory(histories, category);
     }
 
     @Override
+    @Cacheable(value = "selfSelectCards", key = "#userId + '_' + #category")
     public HomeCardsResponseDTO getSelfSelectCards(Long userId, String category) {
         List<BizSearchHistory> histories = searchHistoryMapper.findSelfSelectSearches(userId, 50);
         return buildCardsFromHistory(histories, category);
@@ -127,6 +132,10 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         for (BizSearchHistory history : histories) {
             HomeCardItemDTO card = buildCardFromHistory(history, category, today, rank);
             if (card != null) {
+                // 过滤：无有效统计数据的卡片不显示（用户选择猪大类后，无数据的卡片应隐藏）
+                if (!hasValidStatData(card)) {
+                    continue;
+                }
                 // 去重：根据卡片的实体类型和 ID 过滤重复
                 String entityKey = getCardEntityKey(card);
                 if (entityKey != null && !seenEntityKeys.contains(entityKey)) {
@@ -250,7 +259,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
                     return buildBrandCard(history, category, today, rank);
                 }
                 case "商家":
-                    return buildMerchantCard(history, today, rank);
+                    return buildMerchantCard(history, today, rank, category);
                 case "国家厂号":
                     return buildFactoryCard(history, category, today, rank);
                 case "国家产品":
@@ -408,7 +417,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         card.setBrandId(brandId.intValue());
 
         // 优先从 stat_brand 查今日统计（满足 today_offer_count >= 10 才在 hotBrands 里）
-        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 100);
+        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 100, category);
         for (StatBrandMapper.HotBrand hb : hotBrands) {
             if (hb.brandId != null && hb.brandId.equals(brandId.intValue())) {
                 card.setBrandName(hb.brandName);
@@ -458,7 +467,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         return card;
     }
 
-    private MerchantCardDTO buildMerchantCard(BizSearchHistory history, LocalDate today, int rank) {
+    private MerchantCardDTO buildMerchantCard(BizSearchHistory history, LocalDate today, int rank, String category) {
         Long merchantId = history.getMerchantId();
         if (merchantId == null) {
             String searchWord = history.getSearchWord();
@@ -474,7 +483,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         }
         if (merchantId == null) return null;
 
-        StatMerchant stat = statMerchantMapper.selectByMerchantIdAndDate(merchantId, today);
+        StatMerchant stat = statMerchantMapper.selectByMerchantIdAndDate(merchantId, today, category);
 
         DictMerchant merchant = merchantMapper.selectById(merchantId);
         MerchantCardDTO card = new MerchantCardDTO();
@@ -492,7 +501,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         card.setTodayOfferCount(stat != null ? stat.getTodayOfferCount() : null);
 
         // 最新报盘
-        List<BizOffer> latestOffers = bizOfferMapper.findLatestByMerchant(merchantId, 2);
+        List<BizOffer> latestOffers = bizOfferMapper.findLatestByMerchant(merchantId, 2, category);
         List<MerchantCardDTO.LatestOfferDTO> latestOfferDTOs = new ArrayList<>();
         for (BizOffer offer : latestOffers) {
             MerchantCardDTO.LatestOfferDTO dto = new MerchantCardDTO.LatestOfferDTO();
@@ -553,8 +562,8 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         card.setFactoryNo(stat != null && stat.getFactoryNo() != null ? stat.getFactoryNo() : factoryNo);
         card.setTodayOfferCount(stat != null ? stat.getTodayOfferCount() : null);
 
-        // 热门产品（按 country + factoryNo 精确过滤）
-        List<FactoryProductStatDTO> factoryProducts = bizOfferMapper.aggregateByFactoryProductFiltered(today, card.getCountry(), card.getFactoryNo());
+        // 热门产品（按 country + factoryNo + category 精确过滤）
+        List<FactoryProductStatDTO> factoryProducts = bizOfferMapper.aggregateByFactoryProductFiltered(today, card.getCountry(), card.getFactoryNo(), category);
         List<FactoryCardDTO.HotProductDTO> hotProductsList = new ArrayList<>();
         for (FactoryProductStatDTO fp : factoryProducts) {
             FactoryCardDTO.HotProductDTO dto = new FactoryCardDTO.HotProductDTO();
@@ -644,7 +653,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
 
         // 查询热门工厂
         try {
-            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForCountryProduct(today, country, productId);
+            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForCountryProduct(today, country, productId, category);
             if (factoryStats != null && !factoryStats.isEmpty()) {
                 List<CountryProductCardDTO.FactoryPriceDTO> topFactories = new ArrayList<>();
                 for (FactoryStatWithPriceDTO fs : factoryStats) {
@@ -747,7 +756,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         if (brandNameForStat == null || productNameForStat == null) return null;
 
         // 从 stat_brand_product 表聚合查询（一个品牌名可能对应多条 brand_id 记录）
-        StatBrandProduct stat = statBrandProductMapper.selectAggregatedByBrandNameAndProductName(brandNameForStat, productNameForStat);
+        StatBrandProduct stat = statBrandProductMapper.selectAggregatedByBrandNameAndProductName(brandNameForStat, productNameForStat, category);
         log.info("[DEBUG] buildBrandProductCard stat query brandName={} productName={} -> stat={}", brandNameForStat, productNameForStat, stat);
 
         BrandProductCardDTO card = new BrandProductCardDTO();
@@ -766,7 +775,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
         card.setFactoryCount(stat != null ? stat.getTodayFactoryCount() : null);
 
         // 热门工厂（通过 dict_brand.brand_name 匹配，一个品牌有多个 brandId）
-        List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForBrandProduct(today, brandNameForStat, productId);
+        List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForBrandProduct(today, brandNameForStat, productId, category);
         log.info("[DEBUG] buildBrandProductCard hotFactory query brandName={} productId={} -> count={}", brandNameForStat, productId, factoryStats.size());
         List<BrandProductCardDTO.HotFactoryDTO> hotFactories = new ArrayList<>();
         for (FactoryStatWithPriceDTO fs : factoryStats) {
@@ -781,7 +790,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
 
         // 7日价格趋势：从 stat_brand_product 历史数据读取
         try {
-            List<StatBrandProduct> trendRows = statBrandProductMapper.selectTrendByBrandNameAndProductName(brandNameForStat, productNameForStat);
+            List<StatBrandProduct> trendRows = statBrandProductMapper.selectTrendByBrandNameAndProductName(brandNameForStat, productNameForStat, category);
             if (trendRows != null && !trendRows.isEmpty()) {
                 List<BrandProductCardDTO.TrendPointDTO> trendPointDTOs = new ArrayList<>();
                 for (StatBrandProduct tp : trendRows) {
@@ -876,7 +885,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
             factoryId = factories.get(0).getFactoryId();
         }
 
-        StatFactoryProduct stat = statFactoryProductMapper.selectByFactoryNoAndProductId(factoryNo, productId);
+        StatFactoryProduct stat = statFactoryProductMapper.selectByFactoryNoAndProductId(factoryNo, productId, category);
 
         // 获取产品名用于 IQR 过滤查询
         String productName = stat != null ? stat.getProductName() : null;
@@ -987,7 +996,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
 
         // 热门商家（SQL 已 JOIN dict_merchant 返回 merchantName）
         if (factoryId != null) {
-            List<MerchantStatWithPriceDTO> merchantStats = bizOfferMapper.aggregateByMerchantForFactoryProduct(today, factoryId, productId);
+            List<MerchantStatWithPriceDTO> merchantStats = bizOfferMapper.aggregateByMerchantForFactoryProduct(today, factoryId, productId, category);
             List<FactoryProductCardDTO.HotMerchantDTO> hotMerchants = new ArrayList<>();
             for (MerchantStatWithPriceDTO ms : merchantStats) {
                 FactoryProductCardDTO.HotMerchantDTO dto = new FactoryProductCardDTO.HotMerchantDTO();
@@ -1046,18 +1055,21 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void deleteSearchHistory(Long historyId) {
         searchHistoryMapper.deleteById(historyId);
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void batchDeleteSearchHistory(List<Long> historyIds) {
         searchHistoryMapper.batchDelete(historyIds);
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void addSelfSelect(Long userId, String searchWord, String searchType) {
         Long existingId = searchHistoryMapper.findExistingHistory(userId, searchWord, searchType);
@@ -1072,6 +1084,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void cancelSelfSelect(Long historyId) {
         BizSearchHistory history = new BizSearchHistory();
@@ -1081,6 +1094,7 @@ public class SearchHistoryServiceImpl implements SearchHistoryService {
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void moveToSelfSelect(Long historyId) {
         BizSearchHistory history = new BizSearchHistory();

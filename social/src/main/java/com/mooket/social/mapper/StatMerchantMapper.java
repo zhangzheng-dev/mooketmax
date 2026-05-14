@@ -22,7 +22,7 @@ public interface StatMerchantMapper extends BaseMapper<StatMerchant> {
         public Integer todayOfferCount;
     }
 
-    @Insert({"<script>INSERT INTO stat_merchant (stat_date, merchant_id, today_offer_count, today_inquiry_count, today_product_count, today_factory_count, update_time) VALUES <foreach collection='list' item='item' separator=','>(#{item.statDate}, #{item.merchantId}, #{item.todayOfferCount}, #{item.todayInquiryCount}, #{item.todayProductCount}, #{item.todayFactoryCount}, #{item.updateTime})</foreach> ON CONFLICT (stat_date, merchant_id) DO UPDATE SET today_offer_count = EXCLUDED.today_offer_count, today_inquiry_count = EXCLUDED.today_inquiry_count, today_product_count = EXCLUDED.today_product_count, today_factory_count = EXCLUDED.today_factory_count, update_time = EXCLUDED.update_time</script>"})
+    @Insert({"<script>INSERT INTO stat_merchant (stat_date, merchant_id, category, today_offer_count, today_inquiry_count, today_product_count, today_factory_count, update_time) VALUES <foreach collection='list' item='item' separator=','>(#{item.statDate}, #{item.merchantId}, #{item.category}, #{item.todayOfferCount}, #{item.todayInquiryCount}, #{item.todayProductCount}, #{item.todayFactoryCount}, #{item.updateTime})</foreach> ON CONFLICT (stat_date, merchant_id, category) DO UPDATE SET today_offer_count = EXCLUDED.today_offer_count, today_inquiry_count = EXCLUDED.today_inquiry_count, today_product_count = EXCLUDED.today_product_count, today_factory_count = EXCLUDED.today_factory_count, update_time = EXCLUDED.update_time</script>"})
     void batchUpsert(@Param("list") List<StatMerchant> stats);
 
     @Delete({"DELETE FROM stat_merchant WHERE stat_date = #{statDate}"})
@@ -31,10 +31,10 @@ public interface StatMerchantMapper extends BaseMapper<StatMerchant> {
     @Delete({"DELETE FROM stat_merchant WHERE stat_date < CURRENT_DATE - INTERVAL '30 day'"})
     int deleteOldRecords();
 
-    @Select({"SELECT merchant_id, today_offer_count FROM stat_merchant WHERE stat_date = #{statDate} AND today_offer_count >= 10 ORDER BY today_offer_count DESC LIMIT #{limit}"})
+    @Select({"SELECT merchant_id, today_offer_count FROM stat_merchant WHERE stat_date = #{statDate} AND category = #{category} AND today_offer_count >= 10 ORDER BY today_offer_count DESC LIMIT #{limit}"})
     @Results({@Result(property = "merchantId", column = "merchant_id"), @Result(property = "todayOfferCount", column = "today_offer_count")})
-    List<HotMerchant> findHotMerchants(@Param("statDate") LocalDate statDate, @Param("limit") int limit);
+    List<HotMerchant> findHotMerchants(@Param("statDate") LocalDate statDate, @Param("limit") int limit, @Param("category") String category);
 
-    @Select({"SELECT stat_date, merchant_id, today_offer_count, today_inquiry_count, today_product_count, today_factory_count, update_time FROM stat_merchant WHERE merchant_id = #{merchantId} AND stat_date = #{statDate}"})
-    StatMerchant selectByMerchantIdAndDate(@Param("merchantId") Long merchantId, @Param("statDate") LocalDate statDate);
+    @Select({"SELECT stat_date, merchant_id, today_offer_count, today_inquiry_count, today_product_count, today_factory_count, update_time FROM stat_merchant WHERE merchant_id = #{merchantId} AND stat_date = #{statDate} AND category = #{category}"})
+    StatMerchant selectByMerchantIdAndDate(@Param("merchantId") Long merchantId, @Param("statDate") LocalDate statDate, @Param("category") String category);
 }

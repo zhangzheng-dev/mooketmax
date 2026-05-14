@@ -31,6 +31,9 @@ public interface DictFactoryMapper extends BaseMapper<DictFactory> {
     @Select({"SELECT * FROM dict_factory WHERE REPLACE(factory_no, ' ', '') = REPLACE(#{factoryNo}, ' ', '')"})
     List<DictFactory> selectByFactoryNo(@Param("factoryNo") String factoryNo);
 
+    @Select({"SELECT * FROM dict_factory WHERE REPLACE(factory_no, ' ', '') = REPLACE(#{factoryNo}, ' ', '') AND category = #{category}"})
+    List<DictFactory> selectByFactoryNoWithCategory(@Param("factoryNo") String factoryNo, @Param("category") String category);
+
     @Select({"SELECT * FROM dict_factory WHERE category = #{category} AND REPLACE(country, ' ', '') LIKE CONCAT('%', REPLACE(#{country}, ' ', ''), '%') AND REPLACE(factory_no, ' ', '') LIKE CONCAT('%', REPLACE(#{factoryNo}, ' ', ''), '%')"})
     List<DictFactory> findByCountryAndFactoryNo(@Param("category") String category, @Param("country") String country, @Param("factoryNo") String factoryNo);
 }

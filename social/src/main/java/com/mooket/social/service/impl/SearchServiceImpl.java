@@ -11,6 +11,7 @@ import com.mooket.social.mapper.DictFactoryMapper;
 import com.mooket.social.mapper.DictMerchantMapper;
 import com.mooket.social.mapper.DictProductMapper;
 import com.mooket.social.service.SearchService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import org.slf4j.Logger;
@@ -1025,6 +1026,7 @@ public class SearchServiceImpl implements SearchService {
     }
 
     @Override
+    @CacheEvict(value = {"recentSearchCards", "selfSelectCards"}, allEntries = true)
     public void saveSearchHistory(Long userId, String searchWord, String searchType, Integer isSelfSelect,
                                    Long productId, String productName, String country, String factoryNo,
                                    Long brandId, Long merchantId) {

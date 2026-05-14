@@ -1,6 +1,7 @@
 package com.mooket.app.navigation
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
@@ -50,6 +51,9 @@ import com.mooket.app.ui.screens.profile.ProfileScreen
 import com.mooket.app.ui.screens.profile.EditProfileScreen
 import com.mooket.app.ui.screens.inventory.InventoryScreen
 
+private fun routeEncode(value: String): String = Uri.encode(value)
+private fun routeDecode(value: String): String = Uri.decode(value)
+
 /**
  * 导航路由
  */
@@ -63,38 +67,39 @@ sealed class Screen(val route: String) {
     }
     object Product : Screen("product/{productId}/{category}/{productName}") {
         fun createRoute(productId: Int, category: String, productName: String) =
-            "product/$productId/$category/$productName"
+            "product/$productId/${routeEncode(category)}/${routeEncode(productName)}"
     }
     object Country : Screen("country/{country}/{category}") {
-        fun createRoute(country: String, category: String) = "country/$country/$category"
+        fun createRoute(country: String, category: String) =
+            "country/${routeEncode(country)}/${routeEncode(category)}"
     }
     object Factory : Screen("factory/{country}/{factoryNo}/{category}") {
         fun createRoute(country: String, factoryNo: String, category: String) =
-            "factory/$country/$factoryNo/$category"
+            "factory/${routeEncode(country)}/${routeEncode(factoryNo)}/${routeEncode(category)}"
     }
     object CountryProduct : Screen("country-product/{country}/{productName}/{category}") {
         fun createRoute(country: String, productName: String, category: String) =
-            "country-product/$country/$productName/$category"
+            "country-product/${routeEncode(country)}/${routeEncode(productName)}/${routeEncode(category)}"
     }
     object CountryFactoryProduct : Screen("country-factory-product/{country}/{factoryNo}/{productName}/{category}") {
         fun createRoute(country: String, factoryNo: String, productName: String, category: String) =
-            "country-factory-product/$country/$factoryNo/$productName/$category"
+            "country-factory-product/${routeEncode(country)}/${routeEncode(factoryNo)}/${routeEncode(productName)}/${routeEncode(category)}"
     }
     object SubstituteProduct : Screen("substitute-product/{country}/{factoryNo}/{productName}/{category}") {
         fun createRoute(country: String, factoryNo: String, productName: String, category: String) =
-            "substitute-product/$country/$factoryNo/$productName/$category"
+            "substitute-product/${routeEncode(country)}/${routeEncode(factoryNo)}/${routeEncode(productName)}/${routeEncode(category)}"
     }
     object DataComparison : Screen("data-comparison/{country}/{factoryNos}/{productName}/{category}/{excludeFactoryNo}") {
         fun createRoute(country: String, factoryNos: List<String>, productName: String, category: String, excludeFactoryNo: String? = null) =
-            "data-comparison/${java.net.URLEncoder.encode(country, "UTF-8")}/${factoryNos.joinToString(",")}/${java.net.URLEncoder.encode(productName, "UTF-8")}/$category/${excludeFactoryNo ?: ""}"
+            "data-comparison/${routeEncode(country)}/${factoryNos.joinToString(",") { routeEncode(it) }}/${routeEncode(productName)}/${routeEncode(category)}/${routeEncode(excludeFactoryNo ?: "")}"
     }
     object Brand : Screen("brand/{brandName}/{category}") {
         fun createRoute(brandName: String, category: String) =
-            "brand/${java.net.URLEncoder.encode(brandName, "UTF-8")}/$category"
+            "brand/${routeEncode(brandName)}/${routeEncode(category)}"
     }
     object BrandProduct : Screen("brand-product/{brandName}/{productName}/{category}") {
         fun createRoute(brandName: String, productName: String, category: String) =
-            "brand-product/${java.net.URLEncoder.encode(brandName, "UTF-8")}/${java.net.URLEncoder.encode(productName, "UTF-8")}/$category"
+            "brand-product/${routeEncode(brandName)}/${routeEncode(productName)}/${routeEncode(category)}"
     }
     object Profile : Screen("profile")
     object EditProfile : Screen("profile/edit")
@@ -215,7 +220,7 @@ fun MooketNavHost(
                     // 登录成功，跳转首页
                     HomeScreen(
                         onSearchClick = { category ->
-                            safeNavigate(Screen.Search.route + "/$category")
+                            safeNavigate(Screen.Search.route + "/${routeEncode(category)}")
                         },
                         onProductClick = { productId, cat, productName ->
                             safeNavigate(Screen.Product.createRoute(productId, cat, productName))
@@ -259,7 +264,7 @@ fun MooketNavHost(
         composable(Screen.Home.route) {
             HomeScreen(
                 onSearchClick = { category ->
-                    safeNavigate(Screen.Search.route + "/$category")
+                    safeNavigate(Screen.Search.route + "/${routeEncode(category)}")
                 },
                 onProductClick = { productId, cat, productName ->
                     safeNavigate(Screen.Product.createRoute(productId, cat, productName))
@@ -335,7 +340,7 @@ fun MooketNavHost(
             route = Screen.Search.route + "/{category}",
             arguments = listOf(navArgument("category") { type = NavType.StringType })
         ) { backStackEntry ->
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             val viewModel: SearchViewModel = viewModel(
                 factory = SearchViewModelFactory(context)
             )
@@ -381,7 +386,7 @@ fun MooketNavHost(
             )
         ) { backStackEntry ->
             val merchantId = backStackEntry.arguments?.getLong("merchantId") ?: 1L
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             MerchantScreen(
                 merchantId = merchantId,
                 category = category,
@@ -401,8 +406,8 @@ fun MooketNavHost(
             )
         ) { backStackEntry ->
             val productId = backStackEntry.arguments?.getInt("productId") ?: 0
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
-            val productName = backStackEntry.arguments?.getString("productName") ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
             val viewModel: ProductDetailViewModel = viewModel()
             ProductDetailScreen(
                 productId = productId,
@@ -412,7 +417,7 @@ fun MooketNavHost(
                     safePopBackStack()
                 },
                 onSearchDelete = { cat ->
-                    safeNavigateWithPopUp(Screen.Search.route + "/$cat", Screen.Search.route, true)
+                    safeNavigateWithPopUp(Screen.Search.route + "/${routeEncode(cat)}", Screen.Search.route, true)
                 },
                 onCountryFactoryProductClick = { country, factoryNo, productName, cat ->
                     safeNavigate(Screen.CountryFactoryProduct.createRoute(country, factoryNo, productName, cat))
@@ -429,8 +434,8 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country") ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             CountryDetailScreen(
                 country = country,
                 category = category,
@@ -444,7 +449,7 @@ fun MooketNavHost(
                     safeNavigate(Screen.Factory.createRoute(country, factoryNo, cat))
                 },
                 onSearchDelete = { cat ->
-                    safeNavigateWithPopUp(Screen.Search.route + "/$cat", Screen.Search.route, true)
+                    safeNavigateWithPopUp(Screen.Search.route + "/${routeEncode(cat)}", Screen.Search.route, true)
                 }
             )
         }
@@ -458,9 +463,9 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country") ?: ""
-            val factoryNo = backStackEntry.arguments?.getString("factoryNo") ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
+            val factoryNo = backStackEntry.arguments?.getString("factoryNo")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             FactoryDetailScreen(
                 country = country,
                 factoryNo = factoryNo,
@@ -472,7 +477,7 @@ fun MooketNavHost(
                     safeNavigate(Screen.CountryFactoryProduct.createRoute(country, factoryNo, productName, category))
                 },
                 onSearchDelete = { cat ->
-                    safeNavigateWithPopUp(Screen.Search.route + "/$cat", Screen.Search.route, true)
+                    safeNavigateWithPopUp(Screen.Search.route + "/${routeEncode(cat)}", Screen.Search.route, true)
                 }
             )
         }
@@ -486,9 +491,9 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country") ?: ""
-            val productName = backStackEntry.arguments?.getString("productName") ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             CountryProductScreen(
                 country = country,
                 productName = productName,
@@ -518,10 +523,10 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country") ?: ""
-            val factoryNo = backStackEntry.arguments?.getString("factoryNo") ?: ""
-            val productName = backStackEntry.arguments?.getString("productName") ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
+            val factoryNo = backStackEntry.arguments?.getString("factoryNo")?.let(::routeDecode) ?: ""
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             CountryFactoryProductScreen(
                 country = country,
                 factoryNo = factoryNo,
@@ -555,10 +560,10 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country") ?: ""
-            val factoryNo = backStackEntry.arguments?.getString("factoryNo") ?: ""
-            val productName = backStackEntry.arguments?.getString("productName") ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
+            val factoryNo = backStackEntry.arguments?.getString("factoryNo")?.let(::routeDecode) ?: ""
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             val viewModel: SubstituteProductViewModel = viewModel()
             SubstituteProductScreen(
                 country = country,
@@ -589,12 +594,12 @@ fun MooketNavHost(
                 navArgument("excludeFactoryNo") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val country = backStackEntry.arguments?.getString("country")?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
+            val country = backStackEntry.arguments?.getString("country")?.let(::routeDecode) ?: ""
             val factoryNosStr = backStackEntry.arguments?.getString("factoryNos") ?: ""
-            val factoryNos = factoryNosStr.split(",").filter { it.isNotEmpty() }
-            val productName = backStackEntry.arguments?.getString("productName")?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
-            val excludeFactoryNo = backStackEntry.arguments?.getString("excludeFactoryNo")?.takeIf { it.isNotEmpty() }
+            val factoryNos = factoryNosStr.split(",").filter { it.isNotEmpty() }.map(::routeDecode)
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
+            val excludeFactoryNo = backStackEntry.arguments?.getString("excludeFactoryNo")?.let(::routeDecode)?.takeIf { it.isNotEmpty() }
             val viewModel: DataComparisonViewModel = viewModel()
             DataComparisonScreen(
                 country = country,
@@ -617,8 +622,8 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val brandName = backStackEntry.arguments?.getString("brandName")?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val brandName = backStackEntry.arguments?.getString("brandName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             val viewModel: BrandDetailViewModel = viewModel()
             BrandDetailScreen(
                 brandName = brandName,
@@ -633,7 +638,7 @@ fun MooketNavHost(
                     safeNavigate(Screen.BrandProduct.createRoute(bn, pn, cat))
                 },
                 onSearchDelete = { cat ->
-                    safeNavigateWithPopUp(Screen.Search.route + "/$cat", Screen.Search.route, true)
+                    safeNavigateWithPopUp(Screen.Search.route + "/${routeEncode(cat)}", Screen.Search.route, true)
                 },
                 viewModel = viewModel
             )
@@ -648,9 +653,9 @@ fun MooketNavHost(
                 navArgument("category") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val brandName = backStackEntry.arguments?.getString("brandName")?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
-            val productName = backStackEntry.arguments?.getString("productName")?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: ""
-            val category = backStackEntry.arguments?.getString("category") ?: "牛"
+            val brandName = backStackEntry.arguments?.getString("brandName")?.let(::routeDecode) ?: ""
+            val productName = backStackEntry.arguments?.getString("productName")?.let(::routeDecode) ?: ""
+            val category = backStackEntry.arguments?.getString("category")?.let(::routeDecode) ?: "牛"
             val viewModel: BrandProductDetailViewModel = viewModel()
             BrandProductDetailScreen(
                 brandName = brandName,

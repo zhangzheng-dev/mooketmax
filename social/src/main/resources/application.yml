@@ -52,3 +52,26 @@ logging:
   level:
     com.mooket.social: DEBUG
     org.springframework.jdbc: DEBUG
+
+mooket:
+  internal:
+    sql:
+      enabled: ${MOOKET_INTERNAL_SQL_ENABLED:false}
+      allow-writes: ${MOOKET_INTERNAL_SQL_ALLOW_WRITES:false}
+  datasource:
+    primary:
+      jdbc-url: ${MOOKET_PRIMARY_JDBC_URL}
+      username: ${MOOKET_PRIMARY_DB_USERNAME}
+      password: ${MOOKET_PRIMARY_DB_PASSWORD}
+    mysql:
+      jdbc-url: ${MOOKET_MYSQL_JDBC_URL}
+      username: ${MOOKET_MYSQL_DB_USERNAME}
+      password: ${MOOKET_MYSQL_DB_PASSWORD}
+    erp:
+      jdbc-url: ${MOOKET_ERP_JDBC_URL}
+      username: ${MOOKET_ERP_DB_USERNAME}
+      password: ${MOOKET_ERP_DB_PASSWORD}
+    uac:
+      jdbc-url: ${MOOKET_UAC_JDBC_URL}
+      username: ${MOOKET_UAC_DB_USERNAME}
+      password: ${MOOKET_UAC_DB_PASSWORD}

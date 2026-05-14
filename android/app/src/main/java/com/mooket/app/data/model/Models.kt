@@ -357,6 +357,11 @@ data class EmployeeOfferItem(
     val offerOriginalText: String? = null
 )
 
+data class OfferOriginalTextResponse(
+    val offerId: Long?,
+    val text: String?
+)
+
 /**
  * 厂号价格对比
  */

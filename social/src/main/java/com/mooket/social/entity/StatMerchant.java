@@ -22,6 +22,8 @@ public class StatMerchant {
 
     private Long merchantId;
 
+    private String category;
+
     private Integer todayOfferCount;
 
     private Integer todayInquiryCount;

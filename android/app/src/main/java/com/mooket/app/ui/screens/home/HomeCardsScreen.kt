@@ -176,6 +176,7 @@ fun HomeCardsScreen(
                             items(cards, key = { "${it.cardType}_${it.rank}_${it.historyId}" }) { card ->
                                 HomeCard(
                                     card = card,
+                                    category = uiState.selectedCategory,
                                     onProductClick = onProductClick,
                                     onCountryClick = onCountryClick,
                                     onBrandClick = onBrandClick,
@@ -257,6 +258,7 @@ private fun TabItem(
 @Composable
 private fun HomeCard(
     card: HomeCardItem,
+    category: String,
     onProductClick: (Int, String, String) -> Unit,
     onCountryClick: (String, String) -> Unit,
     onBrandClick: (String, String) -> Unit,
@@ -269,8 +271,6 @@ private fun HomeCard(
     onAddToSelfSelect: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null
 ) {
-    val category = "牛"
-
     Box {
         when (card.cardType) {
             "product" -> ProductCard(

@@ -13,6 +13,7 @@ public class FactoryProductStatDTO {
     private Integer factoryId;
     private Integer productId;
     private String productName;
+    private String category;
     private Integer todayOfferCount;
     private Integer todayInquiryCount;
     private BigDecimal priceMin;

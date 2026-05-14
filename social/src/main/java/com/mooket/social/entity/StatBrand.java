@@ -35,6 +35,11 @@ public class StatBrand {
     private String brandName;
 
     /**
+     * 分类（牛/猪）
+     */
+    private String category;
+
+    /**
      * 今日报盘数
      */
     private Integer todayOfferCount;

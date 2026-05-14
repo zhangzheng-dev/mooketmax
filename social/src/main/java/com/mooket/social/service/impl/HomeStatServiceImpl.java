@@ -8,6 +8,8 @@ import com.mooket.social.mapper.*;
 import com.mooket.social.service.HomeStatService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +65,7 @@ public class HomeStatServiceImpl implements HomeStatService {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     @Override
+    @CacheEvict(value = {"homeHotSearch", "homeStatData", "homeCards", "recentSearchCards", "selfSelectCards"}, allEntries = true)
     @Transactional
     public void computeAllStats() {
         LocalDate today = LocalDate.now();
@@ -291,8 +294,8 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeFactoryStats(LocalDate statDate) {
         log.info("计算国家厂号维度统计，日期：{}", statDate);
 
-        // 按 factoryId 去重，stat_factory 主键是 (stat_date, factory_id) 不含 category
-        Map<Integer, StatFactory> statsMap = new LinkedHashMap<>();
+        // 按 factoryId + category 去重，stat_factory 主键是 (stat_date, factory_id)，每条记录带 category
+        Map<String, StatFactory> statsMap = new LinkedHashMap<>();
 
         for (String category : Arrays.asList("牛", "猪")) {
             List<FactoryStatDTO> rows = bizOfferMapper.aggregateByFactory(statDate, category);
@@ -304,7 +307,8 @@ public class HomeStatServiceImpl implements HomeStatService {
                 if (row.getCountry() == null) continue;
 
                 Integer factoryId = row.getFactoryId();
-                StatFactory existing = statsMap.get(factoryId);
+                String key = factoryId + "|" + category;
+                StatFactory existing = statsMap.get(key);
                 if (existing != null) {
                     existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
                     existing.setTodayInquiryCount(existing.getTodayInquiryCount() + nonNull(row.getTodayInquiryCount()));
@@ -328,7 +332,7 @@ public class HomeStatServiceImpl implements HomeStatService {
                     stat.setPriceMin(row.getPriceMin());
                     stat.setPriceMax(row.getPriceMax());
                     stat.setUpdateTime(LocalDateTime.now());
-                    statsMap.put(factoryId, stat);
+                    statsMap.put(key, stat);
                 }
             }
         }
@@ -348,44 +352,48 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeBrandStats(LocalDate statDate) {
         log.info("计算品牌维度统计，日期：{}", statDate);
 
-        // 按 brandId 去重，stat_brand 主键是 (stat_date, brand_id)
-        Map<Integer, StatBrand> statsMap = new LinkedHashMap<>();
+        // 按 brandId + category 去重，stat_brand 主键是 (stat_date, brand_id, category)
+        Map<String, StatBrand> statsMap = new LinkedHashMap<>();
 
-        List<BrandStatDTO> rows = bizOfferMapper.aggregateByBrand(statDate);
-        for (BrandStatDTO row : rows) {
-            if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
-            if (row.getBrandName() == null) continue;
+        for (String category : Arrays.asList("牛", "猪")) {
+            List<BrandStatDTO> rows = bizOfferMapper.aggregateByBrand(statDate, category);
+            for (BrandStatDTO row : rows) {
+                if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
+                if (row.getBrandName() == null) continue;
 
-            Integer brandId = row.getBrandId();
-            StatBrand existing = statsMap.get(brandId);
-            if (existing != null) {
-                existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
-                existing.setTodayFactoryCount(existing.getTodayFactoryCount() + nonNull(row.getTodayFactoryCount()));
-                existing.setTodayProductCount(existing.getTodayProductCount() + nonNull(row.getTodayProductCount()));
-                if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
-                    existing.setPriceMin(row.getPriceMin());
+                Integer brandId = row.getBrandId();
+                String key = brandId + "|" + category;
+                StatBrand existing = statsMap.get(key);
+                if (existing != null) {
+                    existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
+                    existing.setTodayFactoryCount(existing.getTodayFactoryCount() + nonNull(row.getTodayFactoryCount()));
+                    existing.setTodayProductCount(existing.getTodayProductCount() + nonNull(row.getTodayProductCount()));
+                    if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
+                        existing.setPriceMin(row.getPriceMin());
+                    }
+                    if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
+                        existing.setPriceMax(row.getPriceMax());
+                    }
+                } else {
+                    StatBrand stat = new StatBrand();
+                    stat.setStatDate(statDate);
+                    stat.setBrandId(brandId);
+                    stat.setCategory(category);
+                    // 从dict_brand表获取brandName
+                    String brandName = row.getBrandName();
+                    DictBrand brand = dictBrandMapper.selectById(brandId);
+                    if (brand != null && brand.getBrandName() != null) {
+                        brandName = brand.getBrandName();
+                    }
+                    stat.setBrandName(brandName);
+                    stat.setTodayOfferCount(row.getTodayOfferCount());
+                    stat.setTodayFactoryCount(nonNull(row.getTodayFactoryCount()));
+                    stat.setTodayProductCount(nonNull(row.getTodayProductCount()));
+                    stat.setPriceMin(row.getPriceMin());
+                    stat.setPriceMax(row.getPriceMax());
+                    stat.setUpdateTime(LocalDateTime.now());
+                    statsMap.put(key, stat);
                 }
-                if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
-                    existing.setPriceMax(row.getPriceMax());
-                }
-            } else {
-                StatBrand stat = new StatBrand();
-                stat.setStatDate(statDate);
-                stat.setBrandId(brandId);
-                // 从dict_brand表获取brandName
-                String brandName = row.getBrandName();
-                DictBrand brand = dictBrandMapper.selectById(brandId);
-                if (brand != null && brand.getBrandName() != null) {
-                    brandName = brand.getBrandName();
-                }
-                stat.setBrandName(brandName);
-                stat.setTodayOfferCount(row.getTodayOfferCount());
-                stat.setTodayFactoryCount(nonNull(row.getTodayFactoryCount()));
-                stat.setTodayProductCount(nonNull(row.getTodayProductCount()));
-                stat.setPriceMin(row.getPriceMin());
-                stat.setPriceMax(row.getPriceMax());
-                stat.setUpdateTime(LocalDateTime.now());
-                statsMap.put(brandId, stat);
             }
         }
 
@@ -484,71 +492,56 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeBrandProductStats(LocalDate statDate) {
         log.info("计算品牌产品维度统计，日期：{}", statDate);
 
+        // 按 brandId + productId + category 去重，stat_brand_product 主键是 (stat_date, brand_id, product_id, category)
         Map<String, StatBrandProduct> statsMap = new LinkedHashMap<>();
 
-        // 查昨日 stat_brand_product 数据，用于回填 avgPriceYesterday
-        Map<String, BigDecimal> yesterdayAvgPriceMap = new HashMap<>();
-        List<BrandProductStatDTO> rows = bizOfferMapper.aggregateByBrandProduct(statDate);
-        for (BrandProductStatDTO row : rows) {
-            if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
-            if (row.getBrandName() == null) continue;
-            String key = row.getBrandId() + "|" + row.getProductId();
-            if (!statsMap.containsKey(key)) {
-                StatBrandProduct yesterdayStat = statBrandProductMapper.selectByBrandIdAndProductId(row.getBrandId(), row.getProductId());
-                if (yesterdayStat != null && yesterdayStat.getAvgPrice() != null) {
-                    yesterdayAvgPriceMap.put(key, yesterdayStat.getAvgPrice());
-                }
-            }
-        }
+        for (String category : Arrays.asList("牛", "猪")) {
+            List<BrandProductStatDTO> rows = bizOfferMapper.aggregateByBrandProduct(statDate, category);
+            for (BrandProductStatDTO row : rows) {
+                if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
+                if (row.getBrandName() == null) continue;
 
-        for (BrandProductStatDTO row : rows) {
-            if (row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0) continue;
-            if (row.getBrandName() == null) continue;
-
-            String key = row.getBrandId() + "|" + row.getProductId();
-            StatBrandProduct existing = statsMap.get(key);
-            if (existing != null) {
-                existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
-                existing.setTodayFactoryCount(existing.getTodayFactoryCount() + nonNull(row.getTodayFactoryCount()));
-                if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
-                    existing.setPriceMin(row.getPriceMin());
+                String key = row.getBrandId() + "|" + row.getProductId() + "|" + category;
+                StatBrandProduct existing = statsMap.get(key);
+                if (existing != null) {
+                    existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
+                    existing.setTodayFactoryCount(existing.getTodayFactoryCount() + nonNull(row.getTodayFactoryCount()));
+                    if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
+                        existing.setPriceMin(row.getPriceMin());
+                    }
+                    if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
+                        existing.setPriceMax(row.getPriceMax());
+                    }
+                    if (row.getAvgPrice() != null) {
+                        existing.setAvgPrice(row.getAvgPrice());
+                    }
+                    if (row.getAvgPriceYesterday() != null) {
+                        existing.setAvgPriceYesterday(row.getAvgPriceYesterday());
+                    }
+                    recomputePriceChange(existing);
+                } else {
+                    StatBrandProduct stat = new StatBrandProduct();
+                    stat.setStatDate(statDate);
+                    stat.setBrandId(row.getBrandId());
+                    String brandName = row.getBrandName();
+                    DictBrand brand = dictBrandMapper.selectById(row.getBrandId());
+                    if (brand != null && brand.getBrandName() != null) {
+                        brandName = brand.getBrandName();
+                    }
+                    stat.setBrandName(brandName);
+                    stat.setProductId(row.getProductId());
+                    stat.setProductName(row.getProductName());
+                    stat.setCategory(category);
+                    stat.setTodayOfferCount(row.getTodayOfferCount());
+                    stat.setTodayFactoryCount(nonNull(row.getTodayFactoryCount()));
+                    stat.setPriceMin(row.getPriceMin());
+                    stat.setPriceMax(row.getPriceMax());
+                    stat.setAvgPrice(row.getAvgPrice());
+                    stat.setAvgPriceYesterday(row.getAvgPriceYesterday());
+                    recomputePriceChange(stat);
+                    stat.setUpdateTime(LocalDateTime.now());
+                    statsMap.put(key, stat);
                 }
-                if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
-                    existing.setPriceMax(row.getPriceMax());
-                }
-                if (row.getAvgPrice() != null) {
-                    existing.setAvgPrice(row.getAvgPrice());
-                }
-                if (row.getAvgPriceYesterday() != null) {
-                    existing.setAvgPriceYesterday(row.getAvgPriceYesterday());
-                }
-                recomputePriceChange(existing);
-            } else {
-                StatBrandProduct stat = new StatBrandProduct();
-                stat.setStatDate(statDate);
-                stat.setBrandId(row.getBrandId());
-                String brandName = row.getBrandName();
-                DictBrand brand = dictBrandMapper.selectById(row.getBrandId());
-                if (brand != null && brand.getBrandName() != null) {
-                    brandName = brand.getBrandName();
-                }
-                stat.setBrandName(brandName);
-                stat.setProductId(row.getProductId());
-                stat.setProductName(row.getProductName());
-                stat.setTodayOfferCount(row.getTodayOfferCount());
-                stat.setTodayFactoryCount(nonNull(row.getTodayFactoryCount()));
-                stat.setPriceMin(row.getPriceMin());
-                stat.setPriceMax(row.getPriceMax());
-                stat.setAvgPrice(row.getAvgPrice());
-                // 优先用 SQL 查出的昨日均值，否则用 stat_brand_product 昨日记录回填
-                BigDecimal avgPriceYesterday = row.getAvgPriceYesterday();
-                if (avgPriceYesterday == null) {
-                    avgPriceYesterday = yesterdayAvgPriceMap.get(key);
-                }
-                stat.setAvgPriceYesterday(avgPriceYesterday);
-                recomputePriceChange(stat);
-                stat.setUpdateTime(LocalDateTime.now());
-                statsMap.put(key, stat);
             }
         }
 
@@ -590,68 +583,71 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeFactoryProductStats(LocalDate statDate) {
         log.info("计算国家厂号产品维度统计，日期：{}", statDate);
 
-        // 按 factoryId + productId 去重，stat_factory_product 主键是 (stat_date, factory_id, product_id) 不含 category
+        // 按 factoryId + productId + category 去重，stat_factory_product 主键是 (stat_date, factory_id, product_id, category)
         Map<String, StatFactoryProduct> statsMap = new LinkedHashMap<>();
 
-        List<FactoryProductStatDTO> rows = bizOfferMapper.aggregateByFactoryProduct(statDate);
-        for (FactoryProductStatDTO row : rows) {
-            if ((row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0)
-                    && (row.getTodayInquiryCount() == null || row.getTodayInquiryCount() == 0)) {
-                continue;
-            }
-            if (row.getCountry() == null) continue;
+        for (String category : Arrays.asList("牛", "猪")) {
+            List<FactoryProductStatDTO> rows = bizOfferMapper.aggregateByFactoryProduct(statDate, category);
+            for (FactoryProductStatDTO row : rows) {
+                if ((row.getTodayOfferCount() == null || row.getTodayOfferCount() == 0)
+                        && (row.getTodayInquiryCount() == null || row.getTodayInquiryCount() == 0)) {
+                    continue;
+                }
+                if (row.getCountry() == null) continue;
 
-            String key = row.getFactoryId() + "|" + row.getProductId();
-            StatFactoryProduct existing = statsMap.get(key);
-            if (existing != null) {
-                existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
-                existing.setTodayInquiryCount(existing.getTodayInquiryCount() + nonNull(row.getTodayInquiryCount()));
-                if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
-                    existing.setPriceMin(row.getPriceMin());
-                }
-                if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
-                    existing.setPriceMax(row.getPriceMax());
-                }
-                if (row.getAvgPrice() != null) {
-                    existing.setAvgPrice(row.getAvgPrice());
-                }
-                if (row.getAvgPriceYesterday() != null) {
-                    existing.setAvgPriceYesterday(row.getAvgPriceYesterday());
-                }
-            } else {
-                StatFactoryProduct stat = new StatFactoryProduct();
-                stat.setStatDate(statDate);
-                stat.setCountry(row.getCountry());
-                stat.setFactoryNo(row.getFactoryNo());
-                stat.setFactoryId(row.getFactoryId());
-                stat.setProductId(row.getProductId());
-                stat.setProductName(row.getProductName());
-                stat.setTodayOfferCount(nonNull(row.getTodayOfferCount()));
-                stat.setTodayInquiryCount(nonNull(row.getTodayInquiryCount()));
-                stat.setPriceMin(row.getPriceMin());
-                stat.setPriceMax(row.getPriceMax());
-                stat.setAvgPrice(row.getAvgPrice());
-                stat.setAvgPriceYesterday(row.getAvgPriceYesterday());
-                if (row.getAvgPrice() != null && row.getAvgPriceYesterday() != null
-                        && row.getAvgPriceYesterday().compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal priceChange = row.getAvgPrice().subtract(row.getAvgPriceYesterday());
-                    // price_change in DB is DECIMAL(10,2), max |value| < 1000
-                    if (priceChange.abs().compareTo(new BigDecimal("999.99")) > 0) {
-                        priceChange = priceChange.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+                String key = row.getFactoryId() + "|" + row.getProductId() + "|" + category;
+                StatFactoryProduct existing = statsMap.get(key);
+                if (existing != null) {
+                    existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
+                    existing.setTodayInquiryCount(existing.getTodayInquiryCount() + nonNull(row.getTodayInquiryCount()));
+                    if (row.getPriceMin() != null && (existing.getPriceMin() == null || row.getPriceMin().compareTo(existing.getPriceMin()) < 0)) {
+                        existing.setPriceMin(row.getPriceMin());
                     }
-                    stat.setPriceChange(priceChange);
-                    BigDecimal rate = priceChange
-                            .divide(row.getAvgPriceYesterday(), 4, RoundingMode.HALF_UP)
-                            .multiply(BigDecimal.valueOf(100))
-                            .setScale(2, RoundingMode.HALF_UP);
-                    // price_change_rate in DB is DECIMAL(5,2), max |value| < 1000
-                    if (rate.abs().compareTo(new BigDecimal("999.99")) > 0) {
-                        rate = rate.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+                    if (row.getPriceMax() != null && (existing.getPriceMax() == null || row.getPriceMax().compareTo(existing.getPriceMax()) > 0)) {
+                        existing.setPriceMax(row.getPriceMax());
                     }
-                    stat.setPriceChangeRate(rate);
+                    if (row.getAvgPrice() != null) {
+                        existing.setAvgPrice(row.getAvgPrice());
+                    }
+                    if (row.getAvgPriceYesterday() != null) {
+                        existing.setAvgPriceYesterday(row.getAvgPriceYesterday());
+                    }
+                } else {
+                    StatFactoryProduct stat = new StatFactoryProduct();
+                    stat.setStatDate(statDate);
+                    stat.setCountry(row.getCountry());
+                    stat.setFactoryNo(row.getFactoryNo());
+                    stat.setFactoryId(row.getFactoryId());
+                    stat.setProductId(row.getProductId());
+                    stat.setProductName(row.getProductName());
+                    stat.setCategory(category);
+                    stat.setTodayOfferCount(nonNull(row.getTodayOfferCount()));
+                    stat.setTodayInquiryCount(nonNull(row.getTodayInquiryCount()));
+                    stat.setPriceMin(row.getPriceMin());
+                    stat.setPriceMax(row.getPriceMax());
+                    stat.setAvgPrice(row.getAvgPrice());
+                    stat.setAvgPriceYesterday(row.getAvgPriceYesterday());
+                    if (row.getAvgPrice() != null && row.getAvgPriceYesterday() != null
+                            && row.getAvgPriceYesterday().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal priceChange = row.getAvgPrice().subtract(row.getAvgPriceYesterday());
+                        // price_change in DB is DECIMAL(10,2), max |value| < 1000
+                        if (priceChange.abs().compareTo(new BigDecimal("999.99")) > 0) {
+                            priceChange = priceChange.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+                        }
+                        stat.setPriceChange(priceChange);
+                        BigDecimal rate = priceChange
+                                .divide(row.getAvgPriceYesterday(), 4, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100))
+                                .setScale(2, RoundingMode.HALF_UP);
+                        // price_change_rate in DB is DECIMAL(5,2), max |value| < 1000
+                        if (rate.abs().compareTo(new BigDecimal("999.99")) > 0) {
+                            rate = rate.signum() == 1 ? new BigDecimal("999.99") : new BigDecimal("-999.99");
+                        }
+                        stat.setPriceChangeRate(rate);
+                    }
+                    stat.setUpdateTime(LocalDateTime.now());
+                    statsMap.put(key, stat);
                 }
-                stat.setUpdateTime(LocalDateTime.now());
-                statsMap.put(key, stat);
             }
         }
 
@@ -670,8 +666,8 @@ public class HomeStatServiceImpl implements HomeStatService {
     public void computeMerchantStats(LocalDate statDate) {
         log.info("计算商家维度统计，日期：{}", statDate);
 
-        // 按 merchantId 去重，stat_merchant 主键是 (stat_date, merchant_id)
-        Map<Long, StatMerchant> statsMap = new LinkedHashMap<>();
+        // 按 merchantId + category 去重，stat_merchant 主键是 (stat_date, merchant_id, category)
+        Map<String, StatMerchant> statsMap = new LinkedHashMap<>();
 
         for (String category : Arrays.asList("牛", "猪")) {
             List<MerchantStatDTO> rows = bizOfferMapper.aggregateByMerchant(statDate, category);
@@ -683,7 +679,8 @@ public class HomeStatServiceImpl implements HomeStatService {
                 if (row.getMerchantId() == null) continue;
 
                 Long merchantId = row.getMerchantId();
-                StatMerchant existing = statsMap.get(merchantId);
+                String key = merchantId + "|" + category;
+                StatMerchant existing = statsMap.get(key);
                 if (existing != null) {
                     existing.setTodayOfferCount(existing.getTodayOfferCount() + nonNull(row.getTodayOfferCount()));
                     existing.setTodayInquiryCount(existing.getTodayInquiryCount() + nonNull(row.getTodayInquiryCount()));
@@ -693,12 +690,13 @@ public class HomeStatServiceImpl implements HomeStatService {
                     StatMerchant stat = new StatMerchant();
                     stat.setStatDate(statDate);
                     stat.setMerchantId(merchantId);
+                    stat.setCategory(category);
                     stat.setTodayOfferCount(nonNull(row.getTodayOfferCount()));
                     stat.setTodayInquiryCount(nonNull(row.getTodayInquiryCount()));
                     stat.setTodayProductCount(nonNull(row.getTodayProductCount()));
                     stat.setTodayFactoryCount(nonNull(row.getTodayFactoryCount()));
                     stat.setUpdateTime(LocalDateTime.now());
-                    statsMap.put(merchantId, stat);
+                    statsMap.put(key, stat);
                 }
             }
         }
@@ -718,13 +716,14 @@ public class HomeStatServiceImpl implements HomeStatService {
     }
 
     @Override
+    @Cacheable(value = "homeHotSearch", key = "#category")
     public List<HotSearchItem> getHotSearchRecommendations(String category) {
         LocalDate today = LocalDate.now();
         List<HotSearchItem> result = new ArrayList<>();
         Set<String> usedCoreElements = new HashSet<>();
 
         // 1. 国家厂号产品 - 取前2个
-        List<StatFactoryProduct> hotFactoryProducts = statFactoryProductMapper.findHotFactoryProducts(today, 5);
+        List<StatFactoryProduct> hotFactoryProducts = statFactoryProductMapper.findHotFactoryProducts(today, category, 5);
         for (StatFactoryProduct fp : hotFactoryProducts) {
             if (result.size() >= 5) break;
             String coreElement = fp.getCountry() + "+" + fp.getFactoryNo() + "+" + fp.getProductName();
@@ -789,7 +788,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 5. 品牌 - 取前1个
-        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 3);
+        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 3, category);
         for (StatBrandMapper.HotBrand b : hotBrands) {
             if (result.size() >= 5) break;
             String coreElement = "brand:" + b.brandId;
@@ -805,7 +804,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 6. 商家 - 取前1个
-        List<StatMerchantMapper.HotMerchant> hotMerchants = statMerchantMapper.findHotMerchants(today, 3);
+        List<StatMerchantMapper.HotMerchant> hotMerchants = statMerchantMapper.findHotMerchants(today, 3, category);
         for (StatMerchantMapper.HotMerchant m : hotMerchants) {
             if (result.size() >= 5) break;
             String coreElement = "merchant:" + m.merchantId;
@@ -838,7 +837,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 8. 品牌产品 - 取前1个
-        List<StatBrandProduct> hotBrandProducts = statBrandProductMapper.findHotBrandProducts(today, 3);
+        List<StatBrandProduct> hotBrandProducts = statBrandProductMapper.findHotBrandProducts(today, category, 3);
         for (StatBrandProduct bp : hotBrandProducts) {
             if (result.size() >= 5) break;
             String coreElement = "brandProduct:" + bp.getBrandId() + "+" + bp.getProductId();
@@ -858,6 +857,7 @@ public class HomeStatServiceImpl implements HomeStatService {
     }
 
     @Override
+    @Cacheable(value = "homeStatData", key = "#category")
     public HomeStatData getHomeStatData(String category) {
         // 直接从biz_offer表查询原始数据，避免stat表的过滤条件导致数据遗漏
         BizOfferMapper.HomeStatResult result = bizOfferMapper.selectHomeStatResult(category);
@@ -875,6 +875,7 @@ public class HomeStatServiceImpl implements HomeStatService {
     }
 
     @Override
+    @Cacheable(value = "homeCards", key = "#category")
     public HomeCardsResponseDTO getHomeCards(String category) {
         LocalDate today = LocalDate.now();
         List<HomeCardItemDTO> cards = new ArrayList<>();
@@ -927,7 +928,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 3. 品牌卡片 - 取前3个
-        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 3);
+        List<StatBrandMapper.HotBrand> hotBrands = statBrandMapper.findHotBrands(today, 3, category);
         for (StatBrandMapper.HotBrand b : hotBrands) {
             BrandCardDTO card = new BrandCardDTO();
             card.setCardType("brand");
@@ -941,7 +942,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 4. 商家卡片 - 取前3个
-        List<StatMerchantMapper.HotMerchant> hotMerchants = statMerchantMapper.findHotMerchants(today, 3);
+        List<StatMerchantMapper.HotMerchant> hotMerchants = statMerchantMapper.findHotMerchants(today, 3, category);
         for (StatMerchantMapper.HotMerchant m : hotMerchants) {
             MerchantCardDTO card = new MerchantCardDTO();
             card.setCardType("merchant");
@@ -958,7 +959,7 @@ public class HomeStatServiceImpl implements HomeStatService {
             }
             card.setTodayOfferCount(m.todayOfferCount);
             // 最新报盘需要单独查询
-            List<BizOffer> latestOffers = bizOfferMapper.findLatestByMerchant(m.merchantId, 2);
+            List<BizOffer> latestOffers = bizOfferMapper.findLatestByMerchant(m.merchantId, 2, category);
             List<MerchantCardDTO.LatestOfferDTO> latestOfferDTOs = new ArrayList<>();
             for (BizOffer offer : latestOffers) {
                 MerchantCardDTO.LatestOfferDTO dto = new MerchantCardDTO.LatestOfferDTO();
@@ -985,15 +986,14 @@ public class HomeStatServiceImpl implements HomeStatService {
             card.setFactoryNo(f.factoryNo);
             card.setTodayOfferCount(f.todayOfferCount);
             // 热门产品需要单独查询，并按今日报盘数降序排列取前3
-            List<FactoryProductStatDTO> factoryProducts = bizOfferMapper.aggregateByFactoryProduct(today);
+            List<StatFactoryProduct> factoryProducts =
+                    statFactoryProductMapper.findHotProductsByFactory(today, f.factoryId, category, 3);
             List<FactoryCardDTO.HotProductDTO> hotProductsList2 = new ArrayList<>();
-            for (FactoryProductStatDTO fp : factoryProducts) {
-                if (f.country.equals(fp.getCountry()) && f.factoryNo.equals(fp.getFactoryNo())) {
-                    FactoryCardDTO.HotProductDTO dto = new FactoryCardDTO.HotProductDTO();
-                    dto.setProductName(fp.getProductName());
-                    dto.setOfferCount(fp.getTodayOfferCount());
-                    hotProductsList2.add(dto);
-                }
+            for (StatFactoryProduct fp : factoryProducts) {
+                FactoryCardDTO.HotProductDTO dto = new FactoryCardDTO.HotProductDTO();
+                dto.setProductName(fp.getProductName());
+                dto.setOfferCount(fp.getTodayOfferCount());
+                hotProductsList2.add(dto);
             }
             // 按今日报盘数降序排序后取前3
             hotProductsList2.sort((a, b) -> Integer.compare(
@@ -1007,7 +1007,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 6. 品牌产品卡片 - 取前3个
-        List<StatBrandProduct> hotBrandProducts = statBrandProductMapper.findHotBrandProducts(today, 3);
+        List<StatBrandProduct> hotBrandProducts = statBrandProductMapper.findHotBrandProducts(today, category, 3);
         for (StatBrandProduct bp : hotBrandProducts) {
             BrandProductCardDTO card = new BrandProductCardDTO();
             card.setCardType("brandProduct");
@@ -1023,7 +1023,7 @@ public class HomeStatServiceImpl implements HomeStatService {
             card.setTodayOfferCount(bp.getTodayOfferCount());
             card.setFactoryCount(bp.getTodayFactoryCount());
             // 热门工厂（通过 dict_brand.brand_name 匹配，一个品牌有多个 brandId）
-            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForBrandProduct(today, bp.getBrandName(), bp.getProductId());
+            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForBrandProduct(today, bp.getBrandName(), bp.getProductId(), category);
             List<BrandProductCardDTO.HotFactoryDTO> hotFactories = new ArrayList<>();
             for (FactoryStatWithPriceDTO fs : factoryStats) {
                 BrandProductCardDTO.HotFactoryDTO dto = new BrandProductCardDTO.HotFactoryDTO();
@@ -1036,7 +1036,7 @@ public class HomeStatServiceImpl implements HomeStatService {
             card.setHotFactories(hotFactories);
             // 7日价格趋势
             try {
-                List<StatBrandProduct> trendRows = statBrandProductMapper.selectTrendByBrandNameAndProductName(bp.getBrandName(), bp.getProductName());
+                List<StatBrandProduct> trendRows = statBrandProductMapper.selectTrendByBrandNameAndProductName(bp.getBrandName(), bp.getProductName(), category);
                 if (trendRows != null && !trendRows.isEmpty()) {
                     List<BrandProductCardDTO.TrendPointDTO> trendPointDTOs = new ArrayList<>();
                     for (StatBrandProduct tp : trendRows) {
@@ -1054,7 +1054,7 @@ public class HomeStatServiceImpl implements HomeStatService {
         }
 
         // 7. 国家厂号产品卡片 - 取前3个
-        List<StatFactoryProduct> hotFactoryProducts = statFactoryProductMapper.findHotFactoryProducts(today, 3);
+        List<StatFactoryProduct> hotFactoryProducts = statFactoryProductMapper.findHotFactoryProducts(today, category, 3);
         for (StatFactoryProduct fp : hotFactoryProducts) {
             FactoryProductCardDTO card = new FactoryProductCardDTO();
             card.setCardType("factoryProduct");
@@ -1129,7 +1129,7 @@ public class HomeStatServiceImpl implements HomeStatService {
                 log.warn("获取价格趋势失败: {}", e.getMessage());
             }
             // 热门商家（带价格）- 使用新查询按厂号产品筛选
-            List<MerchantStatWithPriceDTO> merchantStats = bizOfferMapper.aggregateByMerchantForFactoryProduct(today, fp.getFactoryId(), fp.getProductId());
+            List<MerchantStatWithPriceDTO> merchantStats = bizOfferMapper.aggregateByMerchantForFactoryProduct(today, fp.getFactoryId(), fp.getProductId(), category);
             List<FactoryProductCardDTO.HotMerchantDTO> hotMerchantsList = new ArrayList<>();
             for (MerchantStatWithPriceDTO ms : merchantStats) {
                 FactoryProductCardDTO.HotMerchantDTO dto = new FactoryProductCardDTO.HotMerchantDTO();
@@ -1161,7 +1161,7 @@ public class HomeStatServiceImpl implements HomeStatService {
             card.setPriceMax(cp.getPriceMax());
             card.setTodayOfferCount(cp.getTodayOfferCount());
             // 前3工厂报价 - 使用新查询按国家产品筛选
-            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForCountryProduct(today, cp.getCountry(), cp.getProductId());
+            List<FactoryStatWithPriceDTO> factoryStats = bizOfferMapper.aggregateByFactoryForCountryProduct(today, cp.getCountry(), cp.getProductId(), category);
             List<CountryProductCardDTO.FactoryPriceDTO> topFactories = new ArrayList<>();
             for (FactoryStatWithPriceDTO fs : factoryStats) {
                 CountryProductCardDTO.FactoryPriceDTO dto = new CountryProductCardDTO.FactoryPriceDTO();

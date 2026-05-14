@@ -242,6 +242,11 @@ interface ApiService {
         @Query("pageSize") pageSize: Int = 10
     ): ApiResponse<CountryFactoryProductDetail>
 
+    @GET("api/v1/country-factory-product/offer/{offerId}/original-text")
+    suspend fun getOfferOriginalText(
+        @Path("offerId") offerId: Long
+    ): ApiResponse<OfferOriginalTextResponse>
+
     /**
      * 获取平替产品列表
      */
